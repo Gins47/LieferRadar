@@ -53,3 +53,32 @@ services/ai-service/data/
 
 # Setup
 SetUp.md
+
+# Python tooling
+.mypy_cache/
+.ruff_cache/
+
+# Local secrets
+*.pem
+*.key
+
+
+# Legacy refund implementation (migration reference)
+/services/api/src/refund/
+
+# Legacy customer-support implementation (migration reference)
+/services/ai-service/api/routes/support.py
+/services/ai-service/ticket/
+/services/ai-service/test/data/
+/services/ai-service/schemas/ticket.py
+/services/ai-service/prompts/ticket_classifier.py
+/services/ai-service/prompts/ticket_grounded_answer.py
+/services/ai-service/rag/generation/
+/services/ai-service/test/chunk.py
+/services/ai-service/test/cosine.py
+/services/ai-service/test/db_test.py
+/services/ai-service/test/evaluationRunner.py
+/services/ai-service/test/search.py
+
+# Legacy refund/support documentation
+/ReadMe.md
