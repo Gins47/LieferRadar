@@ -1,30 +1,60 @@
 import { Test, TestingModule } from '@nestjs/testing';
 import { INestApplication } from '@nestjs/common';
+import { Client } from 'pg';
 import request from 'supertest';
 import { App } from 'supertest/types';
 import { AppModule } from './../src/app.module';
+import { seedLogisticsFixtures } from '../src/logistics/repository/logistics-fixture-seed';
+import { getTestDatabaseUrl } from './database-test-context';
 
 describe('AppController (e2e)', () => {
-  let app: INestApplication<App>;
+  let app: INestApplication<App> | undefined;
+  let client: Client | undefined;
 
-  beforeEach(async () => {
-    const moduleFixture: TestingModule = await Test.createTestingModule({
-      imports: [AppModule],
-    }).compile();
+  async function closeResources(): Promise<void> {
+    const application = app;
+    const databaseClient = client;
+    app = undefined;
+    client = undefined;
 
-    app = moduleFixture.createNestApplication();
-    await app.init();
+    try {
+      await application?.close();
+    } finally {
+      await databaseClient?.end();
+    }
+  }
+
+  beforeAll(async () => {
+    client = new Client({ connectionString: getTestDatabaseUrl() });
+
+    try {
+      await client.connect();
+      await client.query('DELETE FROM shipments');
+      await client.query('DELETE FROM products');
+      await client.query('DELETE FROM suppliers');
+      await seedLogisticsFixtures(client);
+
+      const moduleFixture: TestingModule = await Test.createTestingModule({
+        imports: [AppModule],
+      }).compile();
+
+      app = moduleFixture.createNestApplication();
+      await app.init();
+    } catch (error) {
+      await closeResources();
+      throw error;
+    }
   });
 
   it('/ (GET)', () => {
-    return request(app.getHttpServer())
+    return request(app!.getHttpServer())
       .get('/')
       .expect(200)
       .expect('Hello World!');
   });
 
   it('/shipments/SHP-001 (GET)', () => {
-    return request(app.getHttpServer())
+    return request(app!.getHttpServer())
       .get('/shipments/SHP-001')
       .expect(200)
       .expect({
@@ -50,10 +80,36 @@ describe('AppController (e2e)', () => {
   });
 
   it('/shipments/unknown (GET)', () => {
-    return request(app.getHttpServer()).get('/shipments/unknown').expect(404);
+    return request(app!.getHttpServer()).get('/shipments/unknown').expect(404);
   });
 
-  afterEach(async () => {
-    await app.close();
+  it('/shipments/SHP-002 (GET)', () => {
+    return request(app!.getHttpServer())
+      .get('/shipments/SHP-002')
+      .expect(200)
+      .expect({
+        id: 'SHP-002',
+        supplier: {
+          id: 'SUP-002',
+          name: 'Lübeck Demo Supplier',
+          location: { city: 'Lübeck', countryCode: 'DE' },
+        },
+        product: {
+          id: 'PROD-001',
+          sku: 'ECU-CTRL-01',
+          name: 'ECU Controller',
+        },
+        quantity: 500,
+        pickupLocation: { city: 'Lübeck', countryCode: 'DE' },
+        destination: { city: 'Hamburg', countryCode: 'DE' },
+        plannedRoute: ['A1'],
+        status: 'PLANNED',
+        pickupAt: '2026-10-03T06:30:00.000Z',
+        plannedDeliveryAt: '2026-10-03T08:30:00.000Z',
+      });
+  });
+
+  afterAll(async () => {
+    await closeResources();
   });
 });

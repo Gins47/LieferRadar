@@ -4,7 +4,10 @@ import { getDatabaseUrl } from './database.config';
 
 @Injectable()
 export class DatabaseService implements OnModuleDestroy {
-  private readonly pool = new Pool({ connectionString: getDatabaseUrl() });
+  private readonly pool = new Pool({
+    connectionString: getDatabaseUrl(),
+    connectionTimeoutMillis: 5_000,
+  });
 
   async verifyConnection(): Promise<void> {
     await this.pool.query('SELECT 1');

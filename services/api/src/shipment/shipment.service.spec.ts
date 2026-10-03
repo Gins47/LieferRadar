@@ -1,108 +1,127 @@
 import { BadRequestException, NotFoundException } from '@nestjs/common';
-import { InMemoryLogisticsRepository } from '../logistics/repository/in-memory-logistics.repository';
+import { Test, TestingModule } from '@nestjs/testing';
+import { Product } from '../logistics/model/product.model';
+import { Shipment } from '../logistics/model/shipment.model';
+import { Supplier } from '../logistics/model/supplier.model';
+import {
+  LOGISTICS_REPOSITORY,
+  LogisticsRepository,
+} from '../logistics/repository/logistics-repository';
 import { ShipmentService } from './shipment.service';
 
 describe('ShipmentService', () => {
-  let repository: InMemoryLogisticsRepository;
+  const supplier: Supplier = {
+    id: 'SUP-001',
+    name: 'Stuttgart Components GmbH',
+    location: { city: 'Stuttgart', countryCode: 'DE' },
+  };
+  const product: Product = {
+    id: 'PROD-001',
+    sku: 'ECU-CTRL-01',
+    name: 'ECU Controller',
+  };
+  const shipment: Shipment = {
+    id: 'SHP-001',
+    supplierId: supplier.id,
+    productId: product.id,
+    quantity: 2000,
+    pickupLocation: { city: 'Stuttgart', countryCode: 'DE' },
+    destination: { city: 'Munich', countryCode: 'DE' },
+    plannedRoute: ['A8'],
+    status: 'IN_TRANSIT',
+    pickupAt: new Date('2026-10-05T08:00:00.000Z'),
+    plannedDeliveryAt: new Date('2026-10-05T14:00:00.000Z'),
+  };
+
+  let repository: jest.Mocked<LogisticsRepository>;
   let service: ShipmentService;
 
-  beforeEach(() => {
-    repository = new InMemoryLogisticsRepository();
-    service = new ShipmentService(repository);
+  beforeEach(async () => {
+    repository = {
+      findSupplierById: jest.fn(),
+      findProductById: jest.fn(),
+      findShipmentById: jest.fn(),
+    };
+    const module: TestingModule = await Test.createTestingModule({
+      providers: [
+        ShipmentService,
+        {
+          provide: LOGISTICS_REPOSITORY,
+          useValue: repository,
+        },
+      ],
+    }).compile();
+
+    service = module.get(ShipmentService);
   });
 
-  it('provides a valid Stuttgart to Munich fixture', () => {
-    const shipment = repository.findShipmentById('SHP-001');
+  it('returns a resolved shipment view', async () => {
+    repository.findShipmentById.mockResolvedValue(shipment);
+    repository.findSupplierById.mockResolvedValue(supplier);
+    repository.findProductById.mockResolvedValue(product);
 
-    expect(shipment).toMatchObject({
+    const shipmentView = await service.getShipment('SHP-001');
+
+    expect(shipmentView).toEqual({
       id: 'SHP-001',
-      supplierId: 'SUP-001',
-      productId: 'PROD-001',
+      supplier,
+      product,
       quantity: 2000,
       pickupLocation: { city: 'Stuttgart', countryCode: 'DE' },
       destination: { city: 'Munich', countryCode: 'DE' },
       plannedRoute: ['A8'],
       status: 'IN_TRANSIT',
-    });
-    expect(shipment?.plannedRoute).not.toHaveLength(0);
-    expect(shipment?.plannedDeliveryAt.getTime()).toBeGreaterThan(
-      shipment?.pickupAt.getTime() ?? 0,
-    );
-    expect(repository.findSupplierById(shipment?.supplierId ?? '')).toMatchObject({
-      id: 'SUP-001',
-      name: 'Stuttgart Components GmbH',
-      location: { city: 'Stuttgart', countryCode: 'DE' },
-    });
-    expect(repository.findProductById(shipment?.productId ?? '')).toMatchObject({
-      id: 'PROD-001',
-      sku: 'ECU-CTRL-01',
-      name: 'ECU Controller',
+      pickupAt: new Date('2026-10-05T08:00:00.000Z'),
+      plannedDeliveryAt: new Date('2026-10-05T14:00:00.000Z'),
     });
   });
 
-  it('returns a resolved shipment view', () => {
-    const shipment = service.getShipment('SHP-001');
+  it('throws not found for an unknown shipment', async () => {
+    repository.findShipmentById.mockResolvedValue(undefined);
 
-    expect(shipment.id).toBe('SHP-001');
-    expect(shipment.supplier).toEqual({
-      id: 'SUP-001',
-      name: 'Stuttgart Components GmbH',
-      location: { city: 'Stuttgart', countryCode: 'DE' },
-    });
-    expect(shipment.product).toEqual({
-      id: 'PROD-001',
-      sku: 'ECU-CTRL-01',
-      name: 'ECU Controller',
-    });
-    expect(shipment.quantity).toBe(2000);
-    expect(shipment.pickupLocation).toEqual({
-      city: 'Stuttgart',
-      countryCode: 'DE',
-    });
-    expect(shipment.destination).toEqual({ city: 'Munich', countryCode: 'DE' });
-    expect(shipment.plannedRoute).toEqual(['A8']);
-    expect(shipment.plannedRoute).not.toHaveLength(0);
-    expect(shipment.status).toBe('IN_TRANSIT');
-    expect(shipment.pickupAt.toISOString()).toBe('2026-10-05T08:00:00.000Z');
-    expect(shipment.plannedDeliveryAt.toISOString()).toBe(
-      '2026-10-05T14:00:00.000Z',
-    );
-    expect(shipment.plannedDeliveryAt.getTime()).toBeGreaterThan(
-      shipment.pickupAt.getTime(),
+    await expect(service.getShipment('SHP-UNKNOWN')).rejects.toThrow(
+      new NotFoundException('shipment not found'),
     );
   });
 
-  it('throws not found for an unknown shipment', () => {
-    expect(() => service.getShipment('SHP-UNKNOWN')).toThrow(NotFoundException);
-  });
+  it('throws an internal consistency error when the supplier is missing', async () => {
+    repository.findShipmentById.mockResolvedValue(shipment);
+    repository.findSupplierById.mockResolvedValue(undefined);
+    repository.findProductById.mockResolvedValue(product);
 
-  it('throws an internal consistency error when the supplier is missing', () => {
-    jest.spyOn(repository, 'findSupplierById').mockReturnValue(undefined);
-
-    expect(() => service.getShipment('SHP-001')).toThrow(
+    await expect(service.getShipment('SHP-001')).rejects.toThrow(
       'invalid shipment fixture relationship',
     );
 
     try {
-      service.getShipment('SHP-001');
+      await service.getShipment('SHP-001');
     } catch (error) {
       expect(error).not.toBeInstanceOf(NotFoundException);
       expect(error).not.toBeInstanceOf(BadRequestException);
     }
   });
 
-  it('throws an internal consistency error when the product is missing', () => {
-    jest.spyOn(repository, 'findProductById').mockReturnValue(undefined);
+  it('throws an internal consistency error when the product is missing', async () => {
+    repository.findShipmentById.mockResolvedValue(shipment);
+    repository.findSupplierById.mockResolvedValue(supplier);
+    repository.findProductById.mockResolvedValue(undefined);
 
-    expect(() => service.getShipment('SHP-001')).toThrow(
+    await expect(service.getShipment('SHP-001')).rejects.toThrow(
       'invalid shipment fixture relationship',
     );
 
     try {
-      service.getShipment('SHP-001');
+      await service.getShipment('SHP-001');
     } catch (error) {
       expect(error).not.toBeInstanceOf(NotFoundException);
       expect(error).not.toBeInstanceOf(BadRequestException);
     }
+  });
+
+  it('propagates database query failures', async () => {
+    const databaseError = new Error('database unavailable');
+    repository.findShipmentById.mockRejectedValue(databaseError);
+
+    await expect(service.getShipment('SHP-001')).rejects.toBe(databaseError);
   });
 });

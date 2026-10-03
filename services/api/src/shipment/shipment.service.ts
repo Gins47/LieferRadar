@@ -1,25 +1,25 @@
-import { Injectable, NotFoundException } from '@nestjs/common';
-import { InMemoryLogisticsRepository } from '../logistics/repository/in-memory-logistics.repository';
+import { Inject, Injectable, NotFoundException } from '@nestjs/common';
 import { ShipmentView } from '../logistics/model/shipment-view.model';
+import { LOGISTICS_REPOSITORY } from '../logistics/repository/logistics-repository';
+import type { LogisticsRepository } from '../logistics/repository/logistics-repository';
 
 @Injectable()
 export class ShipmentService {
   constructor(
-    private readonly logisticsRepository: InMemoryLogisticsRepository,
+    @Inject(LOGISTICS_REPOSITORY)
+    private readonly logisticsRepository: LogisticsRepository,
   ) {}
 
-  getShipment(id: string): ShipmentView {
-    const shipment = this.logisticsRepository.findShipmentById(id);
+  async getShipment(id: string): Promise<ShipmentView> {
+    const shipment = await this.logisticsRepository.findShipmentById(id);
     if (!shipment) {
       throw new NotFoundException('shipment not found');
     }
 
-    const supplier = this.logisticsRepository.findSupplierById(
-      shipment.supplierId,
-    );
-    const product = this.logisticsRepository.findProductById(
-      shipment.productId,
-    );
+    const [supplier, product] = await Promise.all([
+      this.logisticsRepository.findSupplierById(shipment.supplierId),
+      this.logisticsRepository.findProductById(shipment.productId),
+    ]);
     if (!supplier || !product) {
       throw new Error('invalid shipment fixture relationship');
     }

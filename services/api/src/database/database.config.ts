@@ -29,6 +29,7 @@ function getIsolatedTestDatabaseUrl(): string {
 
 export function getDatabaseUrl(): string {
   if (
+    process.env.NODE_ENV === 'test' ||
     process.env.LIEFERRADAR_TEST_CONTEXT ||
     process.env.LIEFERRADAR_TEST_DATABASE_URL
   ) {
