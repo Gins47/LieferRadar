@@ -1,7 +1,7 @@
 # Iteration 002 — Autobahn Integration & Persistence
 
 **Project:** LieferRadar  
-**Status:** Phase 002A in progress — CP1 and CP2 completed; CP3 next<br>
+**Status:** Phase 002A in progress — CP1, CP2 and CP3 completed; CP4 next<br>
 **Dependency:** Iteration 001 — Completed  
 **Database:** PostgreSQL 18 with pgvector, running through Docker Compose
 
@@ -26,7 +26,7 @@ Approved database decisions are recorded in [Database architecture](../architect
 
 # Phase 002A — PostgreSQL Persistence & Retrieval
 
-**Status:** CP1 and CP2 completed; CP3 next, awaiting implementation authorization
+**Status:** CP1, CP2 and CP3 completed; CP4 next, awaiting implementation authorization
 
 **Goal:** Implement reliable database persistence and disruption retrieval independently of the external Autobahn API.
 
@@ -36,7 +36,7 @@ Approved database decisions are recorded in [Database architecture](../architect
 | ---------- | ----- | ------ | --------------- |
 | CP1 | Connection configuration, migration tooling and isolated PostgreSQL testing | Completed | Nest database-module connectivity, migration runner, existing HTTP tests and separate failure-cleanup verification |
 | CP2 | Supplier, Product and Shipment tables with explicit fixture seeding | Completed | Logistics migrations, idempotent fixture round-trip and CP2.3 verification in isolated PostgreSQL |
-| CP3 | PostgreSQL logistics repository and asynchronous shipment lookups | Not started | Unchanged shipment HTTP response, 404 and internal relationship-error behavior |
+| CP3 | PostgreSQL logistics repository and asynchronous shipment lookups | Completed | Unchanged shipment HTTP response, 404 and internal relationship-error behavior |
 | CP4 | Disruption table, indexes, inserts, upserts and identity lookups | Not started | Deduplication, timestamps, provenance, nullable fields and raw-payload preservation |
 | CP5 | A1 fixture-backed queries, Berlin date filtering and pagination | Not started | Authentic fixture retrieval, combined filters, timezone boundaries and stable ordering |
 | CP6 | Disruption retrieval module, DTOs, service and controller | Not started | List/detail HTTP contracts, query validation and shipment regression |
@@ -76,7 +76,16 @@ npm --prefix services/api run test:integration
 npm --prefix services/api run test:integration:cleanup
 ```
 
-**Next checkpoint:** CP3 introduces PostgreSQL logistics repository lookups. It must preserve the shipment HTTP contract and does not add disruption storage or collection. Stop for review at each authorized checkpoint.
+### CP3 completion record — CP3.4 verification, 2026-10-03
+
+- The application resolves `LOGISTICS_REPOSITORY` to PostgreSQL. Shipment lookup is asynchronous; supplier/product resolution remains in `ShipmentService`. Unknown IDs return 404, broken relationships remain internal errors, and database failures propagate unchanged.
+- Unit tests passed with database configuration removed (7 suites, 12 tests). Isolated database tests passed (4 suites, 11 tests), including repository mapping for both fixtures and parameterized lookups. Real `AppModule` HTTP tests passed (1 suite, 4 tests), preserving the full SHP-001 response and verifying SHP-002 and unknown-ID 404.
+- TypeScript and production build passed. Full non-mutating lint reports one pre-existing unused `metadata` error in `zod-body-validation.pipe.ts:11`, traced to Iteration 001; no CP3 lint regressions were found.
+- Compiled local startup loaded `.env`, connected to development PostgreSQL and terminated successfully via SIGTERM. A production probe with unavailable PostgreSQL exited before listening. These probes did not migrate or seed development data. Connectivity uses a five-second connection timeout; module destruction closes the pool.
+- Test mode requires isolated runner configuration. Controlled failure-cleanup verification passed, removing its container and network. Migrations and seeding remain explicit, and HTTP tests seed their own isolated state once per suite.
+- Final review identified and corrected a build-layout defect: `scripts/` is excluded from the Nest application build so the existing production command can find `dist/main.js`. Scripts still execute separately through their npm commands. Development and production instructions are updated in `services/api/README.md`.
+
+**Next checkpoint:** CP4 introduces disruption storage, indexes and identity lookups. It requires separate authorization. Stop for review at each checkpoint.
 
 ## A1. Database configuration
 
@@ -97,7 +106,7 @@ Tasks:
 - [x] Use the approved `pg` driver and `node-pg-migrate` tooling; no TypeORM.
 - [x] Introduce version-controlled migration tooling and its directory.
 - [x] Configure an isolated, ephemeral PostgreSQL test container in its own Compose project, using the development image version.
-- [ ] Verify development-backed application connectivity when registering persistence at CP3.
+- [x] Verify development-backed application connectivity when registering persistence at CP3.
 
 Application schema migrations begin at CP2. Tests must use the runner-owned database and must never create or modify a test database in the development container.
 

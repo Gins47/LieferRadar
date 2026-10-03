@@ -8,7 +8,7 @@
 
 - Use PostgreSQL with `pg` and `node-pg-migrate`; do not introduce TypeORM.
 - Keep application SQL in repositories and schema changes in versioned migrations under `services/api/migrations/`, rather than `infra/postgresql/init.sql`.
-- Use injectable concrete repository classes and typed persistence rows. Keep database representations separate from the existing domain interfaces; no generic repository layer or custom injection tokens are required.
+- Use an injectable PostgreSQL logistics repository with typed persistence rows. The approved CP3 adjustment adds a minimal `LogisticsRepository` interface with three asynchronous ID lookups and a `LOGISTICS_REPOSITORY` Nest injection token. Keep database rows separate from domain interfaces; no generic repository layer is required.
 - Retain one shared logistics repository under `src/logistics/repository/` and shared domain models under `src/logistics/model/`. Supplier, Product and Shipment remain separate feature modules; Location remains a shared value stored as JSONB.
 - Preserve string logistics IDs, supplier/product references, `plannedRoute`, and `pickupAt`/`plannedDeliveryAt`. Store journey timestamps as `TIMESTAMPTZ` and motorway identifiers as `TEXT[]`; motorway intent is not route geometry.
 - Store shipment quantity as `INTEGER`; quantities are positive whole-number units.
@@ -43,6 +43,6 @@ The first command runs normal integration and HTTP tests. The second verifies cl
 
 ## Implementation boundary
 
-CP1 supplies connection configuration, an injectable pool, migration tooling and isolated test orchestration. CP2.1 adds the versioned Supplier, Product and Shipment schema migration with an isolated up/down/up check. `DatabaseModule` is not yet registered in `AppModule`; logistics still uses its in-memory repository. CP1 and CP2.1 verify isolated database behavior, not development-backed application persistence.
+CP1 supplies connection configuration, an injectable pool, migration tooling and isolated test orchestration. CP2.1 adds the versioned logistics schema migration. CP3 registers `DatabaseModule` through `LogisticsModule`, binds the repository token to PostgreSQL and makes shipment services asynchronous. The in-memory repository remains on disk but is no longer registered in the application.
 
-CP2.2 provides explicit logistics fixture seeding through a development-only command. It inserts both fixture groups in one transaction, verifies values after conflict-safe inserts and rolls back conflicting runs. Repository migration follows at CP3. Phase 002A remains storage and fixture-based retrieval; provider normalization, live collection and general replay are Phase 002B. Python migrations remain independent, and this decision adds no PostGIS, scheduler, tracking, AI or frontend work.
+CP2.2 provides explicit logistics fixture seeding through a development-only command. It inserts both fixture groups in one transaction, verifies values after conflict-safe inserts and rolls back conflicting runs. Migrations and seeding are never executed at startup. Local development loads `.env`; production uses external configuration. Test mode requires the isolated runner context. Startup verifies connectivity with a five-second connection timeout, and Nest shutdown hooks close the pool. Phase 002A remains storage and fixture-based retrieval; provider normalization, live collection and general replay are Phase 002B. Python migrations remain independent, and this decision adds no PostGIS, scheduler, tracking, AI or frontend work.

@@ -33,6 +33,19 @@ $ npm install
 
 ## Compile and run the project
 
+Run these commands from `services/api` using Node.js 24 or later, with the
+existing development PostgreSQL container running. Set `DATABASE_URL` in the
+local `.env` file. Prepare the database explicitly before first use:
+
+```bash
+npm run migrate:up:local
+npm run seed:logistics:local
+```
+
+The development-only seed command inserts both shipment fixtures. Startup does
+not execute migrations or seed data. Local startup loads `.env` when present;
+exported shell variables take precedence.
+
 ```bash
 # development
 $ npm run start
@@ -44,18 +57,32 @@ $ npm run start:dev
 $ npm run start:prod
 ```
 
+For production, run `npm run build`, supply `NODE_ENV=production` and
+`DATABASE_URL` externally, apply migrations with `npm run migrate:up`, then run
+`npm run start:prod`. Production does not load `.env`. Startup verifies database
+connectivity before listening, with a five-second connection timeout.
+SIGINT/SIGTERM invoke Nest shutdown hooks to close the pool. Schema readiness
+still requires explicit migrations.
+
 ## Run tests
 
 ```bash
 # unit tests
 $ npm run test
 
-# e2e tests
-$ npm run test:e2e
+# isolated PostgreSQL integration and HTTP tests (requires Docker)
+$ npm run test:integration
+
+# verify cleanup after a controlled failure
+$ npm run test:integration:cleanup
 
 # test coverage
 $ npm run test:cov
 ```
+
+Unit tests require neither PostgreSQL nor `DATABASE_URL`. Database-backed HTTP
+tests must use `test:integration`; direct `test:e2e` execution without runner
+context fails before connecting.
 
 ## Deployment
 
