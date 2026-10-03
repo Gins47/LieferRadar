@@ -21,7 +21,10 @@
     "test:db": "jest --config ./test/jest-integration.json --runInBand",
     "test:integration": "node scripts/run-integration-tests.js",
     "test:integration:cleanup": "node scripts/run-integration-tests.js --verify-cleanup --cleanup-only",
-    "migrate:up": "node-pg-migrate up --migrations-dir migrations"
+    "migrate:up": "node-pg-migrate up --migrations-dir migrations",
+    "migrate:down": "node-pg-migrate down --migrations-dir migrations",
+    "migrate:up:local": "node --env-file=.env ./node_modules/node-pg-migrate/bin/node-pg-migrate.js up --migrations-dir migrations",
+    "migrate:down:local": "node --env-file=.env ./node_modules/node-pg-migrate/bin/node-pg-migrate.js down --migrations-dir migrations"
   },
   "dependencies": {
     "@nestjs/common": "^11.0.1",

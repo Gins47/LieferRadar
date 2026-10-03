@@ -11,6 +11,7 @@
 - Use injectable concrete repository classes and typed persistence rows. Keep database representations separate from the existing domain interfaces; no generic repository layer or custom injection tokens are required.
 - Retain one shared logistics repository under `src/logistics/repository/` and shared domain models under `src/logistics/model/`. Supplier, Product and Shipment remain separate feature modules; Location remains a shared value stored as JSONB.
 - Preserve string logistics IDs, supplier/product references, `plannedRoute`, and `pickupAt`/`plannedDeliveryAt`. Store journey timestamps as `TIMESTAMPTZ` and motorway identifiers as `TEXT[]`; motorway intent is not route geometry.
+- Store shipment quantity as `INTEGER`; quantities are positive whole-number units.
 - Preserve the complete `SHP-001` response and deterministic Stuttgart–Munich/A8 fixture when persistence is introduced. Unknown shipments remain 404; broken internal relationships remain internal errors.
 
 ## Disruption storage and retrieval
