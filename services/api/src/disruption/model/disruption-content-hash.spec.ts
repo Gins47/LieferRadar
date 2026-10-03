@@ -1,4 +1,4 @@
-import { Disruption } from './disruption.model';
+import { Disruption, JsonObject } from './disruption.model';
 import { calculateDisruptionContentHash } from './disruption-content-hash';
 
 function createDisruption(overrides: Partial<Disruption> = {}): Disruption {
@@ -46,6 +46,21 @@ function createDisruption(overrides: Partial<Disruption> = {}): Disruption {
 }
 
 describe('calculateDisruptionContentHash', () => {
+  it('retains JSON object keys such as __proto__ in canonical content', () => {
+    const geometry = JSON.parse(
+      '{"type":"LineString","__proto__":{"evidence":"first"}}',
+    ) as JsonObject;
+    const changedGeometry = JSON.parse(
+      '{"__proto__":{"evidence":"second"},"type":"LineString"}',
+    ) as JsonObject;
+    expect(
+      calculateDisruptionContentHash(createDisruption({ geometry })),
+    ).not.toBe(
+      calculateDisruptionContentHash(
+        createDisruption({ geometry: changedGeometry }),
+      ),
+    );
+  });
   it('returns the same hash for equivalent recursively reordered objects', () => {
     const original = createDisruption();
     const reordered = createDisruption({

@@ -36,12 +36,11 @@ function canonicalizeJson(value: JsonValue): CanonicalJsonValue {
   }
 
   if (value !== null && typeof value === 'object') {
-    return Object.keys(value)
-      .sort()
-      .reduce<CanonicalJsonObject>((canonical, key) => {
-        canonical[key] = canonicalizeJson((value as JsonObject)[key]);
-        return canonical;
-      }, {});
+    return Object.fromEntries(
+      Object.keys(value)
+        .sort()
+        .map((key) => [key, canonicalizeJson((value as JsonObject)[key])]),
+    );
   }
 
   return value;

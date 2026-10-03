@@ -1,7 +1,7 @@
 # Iteration 002 — Autobahn Integration & Persistence
 
 **Project:** LieferRadar  
-**Status:** Phase 002A in progress — CP1, CP2 and CP3 completed; CP4.1 and CP4.2 completed, awaiting review<br>
+**Status:** Phase 002A in progress — CP1–CP4 completed; CP5 next, awaiting approval<br>
 **Dependency:** Iteration 001 — Completed  
 **Database:** PostgreSQL 18 with pgvector, running through Docker Compose
 
@@ -26,7 +26,7 @@ Approved database decisions are recorded in [Database architecture](../architect
 
 # Phase 002A — PostgreSQL Persistence & Retrieval
 
-**Status:** CP1, CP2 and CP3 completed; CP4.1 and CP4.2 completed, awaiting review
+**Status:** CP1–CP4 completed; CP5 next, awaiting approval
 
 **Goal:** Implement reliable database persistence and disruption retrieval independently of the external Autobahn API.
 
@@ -37,7 +37,7 @@ Approved database decisions are recorded in [Database architecture](../architect
 | CP1 | Connection configuration, migration tooling and isolated PostgreSQL testing | Completed | Nest database-module connectivity, migration runner, existing HTTP tests and separate failure-cleanup verification |
 | CP2 | Supplier, Product and Shipment tables with explicit fixture seeding | Completed | Logistics migrations, idempotent fixture round-trip and CP2.3 verification in isolated PostgreSQL |
 | CP3 | PostgreSQL logistics repository and asynchronous shipment lookups | Completed | Unchanged shipment HTTP response, 404 and internal relationship-error behavior |
-| CP4 | Disruption table, indexes, inserts, upserts and identity lookups | In progress — CP4.1 and CP4.2 completed | Disruption schema, canonical model/hash, then persistence behavior and identity lookups |
+| CP4 | Disruption table, indexes, inserts, upserts and identity lookups | Completed | Disruption schema, canonical model/hash, persistence behavior and identity lookups |
 | CP5 | A1 fixture-backed queries, Berlin date filtering and pagination | Not started | Authentic fixture retrieval, combined filters, timezone boundaries and stable ordering |
 | CP6 | Disruption retrieval module, DTOs, service and controller | Not started | List/detail HTTP contracts, query validation and shipment regression |
 | CP7 | Phase 002A acceptance and diff review | Not started | Complete checks and persistence after application restart; review before Phase 002B |
@@ -100,7 +100,23 @@ npm --prefix services/api run test:integration:cleanup
 - `(source, provider_id)` remains the persistence identity and is deliberately excluded from its content hash. A later queried-road update produces a new content hash but does not itself establish impact. Historical replay capture and observation timestamps are excluded; provider timestamps, including omitted versus explicit-null state, remain in the hash.
 - No PostgreSQL repository, upsert behavior, collection, resolution processing, HTTP endpoints, matching or AI integration was added.
 
-**Next checkpoint:** CP4.3 requires separate authorization. Do not begin it without review.
+### CP4.3 completion record — 2026-10-03
+
+- Added a PostgreSQL disruption repository with parameterized identity lookup, active-disruption retrieval and transactional observation upserts. It computes the canonical hash after merging omitted timestamps with existing stored values.
+- `(source, provider_id)` is the stable identity. Accepted observations must have a strictly newer `lastSeenAt`; an accepted live observation promotes provenance to LIVE, while replay cannot overwrite a record that has been observed live. Upserts do not infer resolution.
+- The single `queried_road` field records the most recently accepted retrieval context. A different road query updates it only when its observation is newer; equal timestamps retain the stored value. It is still not evidence of route impact.
+- Added isolated repository tests for insertion, identity lookup, unchanged and changed observations, provider timestamp corrections, missing optional fields, replay precedence, active retrieval and concurrent duplicates.
+- Current checks passed: unit tests (8 suites, 18 tests), TypeScript check, focused CP4.3 lint, production build, isolated database tests (6 suites, 21 tests), and PostgreSQL-backed shipment HTTP regression tests (1 suite, 4 tests). The integration runner removed its temporary container and network.
+
+### CP4.4 completion record — 2026-10-03
+
+- Reviewed the migration, application-owned model, canonical hashing and repository together. The unique source/provider identity protects concurrent inserts; `SELECT ... FOR UPDATE` serializes updates. Under the existing PostgreSQL READ COMMITTED isolation, a conflicting insert retries its lookup in a fresh statement snapshot before merging. Concurrent changed observations retain the newest accepted content and stable identity.
+- Corrected LIVE insertion to derive `lastLiveSeenAt` from `lastSeenAt`, and use LIVE provenance to reject replay even if an older stored record lacks its live timestamp. New records derive `contentChangedAt` from their accepted observation. Corrected canonicalization to retain JSON keys such as `__proto__`.
+- Added focused coverage for concurrent changed content, preserved-timestamp hashing, replay-to-live promotion, transaction rollback, distinct sources and parameterized identity lookups. Existing tests cover new/changed/unchanged observations, explicit nulls, stale observations, replay precedence, nullable fields, original German content, raw payload, geometry and active retrieval. Upserts preserve existing lifecycle state; no resolution execution is present.
+- Actual final checks: unit tests passed (8 suites, 19 tests); isolated PostgreSQL tests passed (6 suites, 25 tests); real shipment HTTP tests passed (1 suite, 4 tests), including both complete shipment responses and unknown-ID 404. TypeScript and production build passed. Full lint was run without `--fix` and reports only the pre-existing unused `metadata` error in `src/common/pipes/zod-body-validation.pipe.ts:11`, also present in HEAD. No CP4 lint regression was found. The isolated runner removed its container and network; `git diff --check` passed.
+- Remaining assumptions: provider IDs are stable and unique within the configured source, including across categories; `lastSeenAt` is a trusted observation instant rather than an event start time or arbitrary replay execution time. One `queried_road` retains only the latest accepted query context; equal-time observations retain the first stored context. This does not establish an affected road or shipment impact.
+
+**Next checkpoint:** CP5 requires separate authorization. Stop for review before proceeding.
 
 ## A1. Database configuration
 
