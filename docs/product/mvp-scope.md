@@ -35,7 +35,7 @@ Build a demonstrable **AI-assisted logistics disruption copilot**. The system in
 
 ### C. Disruption API and retrieval
 - Filter latest-state warnings by motorway, category and relevant date criteria.
-- Define Europe/Berlin date input semantics with correct UTC database comparisons.
+- Use UTC for stored timestamp instants and internal service communication. Interpret calendar-date filters in Europe/Berlin and convert each local midnight independently inside PostgreSQL for UTC comparisons, without a new timezone dependency. See [Database architecture](../architecture/database.md) for the CP5 implementation clarification.
 - Provide deterministic pagination and REST endpoints for dashboard consumption.
 - Date filtering must not imply historical reconstruction.
 
@@ -139,6 +139,7 @@ These are delivery stages, not promises of exact dates or a new checkpoint numbe
 | D08 | Mock vehicle simulation stays inside NestJS | Limits complexity | Approved |
 | D09 | Human approval before operational actions | Keeps operator in control | Approved |
 | D10 | No dynamic routing or real GPS integration in MVP | Keeps scope achievable | Approved |
+| D11 | UTC for stored timestamps and internal service communication; Europe/Berlin calendar boundaries converted independently inside PostgreSQL, with no new timezone dependency | Correct DST boundaries and comparisons against indexed TIMESTAMPTZ columns; clarifies §2C and CP5 without changing CP4 persistence semantics | Approved 2026-10-03; implementation pending |
 
 ## 8. Open concerns and validation gates
 
@@ -175,6 +176,7 @@ For every proposed material change:
 | Date | Version | Change | Approval |
 |---|---|---|---|
 | 2026-10-03 | 1.0 | Initial consolidated MVP scope and decision register | Approved |
+| 2026-10-03 | 1.0 | Recorded D11: CP5 timezone implementation clarification for §2C; database and iteration documentation aligned | Explicit user approval |
 
 ## 10. Definition of MVP done
 

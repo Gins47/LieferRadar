@@ -118,6 +118,23 @@ npm --prefix services/api run test:integration:cleanup
 
 **Next checkpoint:** CP5 requires separate authorization. Stop for review before proceeding.
 
+### CP5 proposed implementation plan
+
+**Status:** Not started. The timezone clarification below was approved on 2026-10-03; the remaining plan and implementation authorization are pending.
+
+| Step | Proposed scope | Verification gate |
+| ---- | -------------- | ----------------- |
+| CP5.1 | Application-owned query types and validation for queried road, category, calendar dates, selected timestamp and pagination | Focused unit tests for valid dates, exclusive date/range inputs, reversed ranges and pagination defaults/limits |
+| CP5.2 | Extend the existing repository with parameterized active-state filtering, PostgreSQL Berlin-to-UTC boundary conversion, deterministic ordering and paginated totals | Isolated PostgreSQL tests for combined filters, inclusive/exclusive UTC comparisons and accurate page totals |
+| CP5.3 | Authentic A1 warning retrieval and clearly labeled synthetic boundary controls | German descriptions/raw payload/GeoJSON preservation; missing timestamps; one-sided ranges; DST days; stable tie ordering and empty pages |
+| CP5.4 | Final acceptance review and actual verification record | Unit, isolated integration and existing shipment HTTP tests; TypeScript, build, non-mutating lint and scope/diff review |
+
+The approved timezone approach uses PostgreSQL's existing timezone support; no application timezone library or custom offset algorithm is planned. UTC remains the standard for stored timestamp instants and internal service communication. Interpret calendar-date inputs with explicit `Europe/Berlin` inside repository SQL, calculate each local midnight independently, and compare converted boundaries directly against the existing indexed `TIMESTAMPTZ` columns. See [Database architecture](../architecture/database.md#cp5-timezone-clarification--approved-2026-10-03) and MVP decision D11.
+
+Planned timezone checks include lower-bound inclusion, upper-bound exclusion, the following local midnight for inclusive `to`, and both spring/autumn DST transitions under differing database session timezones. Missing starts remain excluded from start-date filtering without fallback; end timestamps do not introduce interval-overlap semantics. Reads retain the latest stored state and do not reconstruct historical versions.
+
+The proposed paginated repository return type and test-only subtype fallback remain subject to review. CP5 does not add HTTP endpoints, collection, automatic resolution, tracking, matching or AI analysis, and does not alter CP4 upsert, hashing or timestamp-merging behavior.
+
 ## A1. Database configuration
 
 PostgreSQL is already running through the existing `docker-compose.yaml`.
@@ -310,8 +327,9 @@ GET /disruptions?date=2026-10-03&dateField=capturedAt
 ### Date-filtering rules
 
 - Default `dateField` to `startTimestamp`.
-- Interpret date-only inputs using `Europe/Berlin`.
-- Convert date boundaries to UTC before database queries.
+- Use UTC for stored timestamp instants and internal service communication; interpret date-only filters using `Europe/Berlin`.
+- Convert local calendar boundaries to UTC instants inside PostgreSQL using explicit `AT TIME ZONE 'Europe/Berlin'`; compare them directly against indexed `TIMESTAMPTZ` columns.
+- Calculate each local midnight independently, including midnight after the `to` date. Do not derive the upper UTC bound by adding 24 hours; handle DST without a new timezone dependency.
 - Use inclusive start and exclusive end timestamps.
 - Reject invalid dates and reversed ranges.
 - Do not combine `date` with `from` or `to`.

@@ -32,8 +32,18 @@
 - Repository insertion derives `lastLiveSeenAt` for LIVE observations and `contentChangedAt` from `lastSeenAt`. Observation updates lock the existing row and hash the effective content after timestamp merging; conflicting inserts retry the identity lookup inside the same READ COMMITTED transaction.
 - Provider IDs are assumed stable and unique within a configured source across categories. The single queried-road field does not retain all roads through which a warning was observed. `lastSeenAt` must be a trusted observation instant; later replay orchestration must preserve historical observation evidence rather than use replay execution time to imply freshness.
 - Lifecycle resolution is explicit: repository upserts never infer resolution from an absent warning. The provisional two-consecutive-complete-collection policy remains collection work outside CP4.
-- Expose PostgreSQL reads through `GET /disruptions` and `GET /disruptions/:id`. Interpret calendar-date filters in `Europe/Berlin`, convert to UTC, and query inclusive start/exclusive end boundaries. Include the `to` calendar date through midnight of its following day; allow one-sided ranges.
+- Expose PostgreSQL reads through `GET /disruptions` and `GET /disruptions/:id`. Interpret calendar-date filters in `Europe/Berlin` and convert their boundaries inside PostgreSQL to UTC instants for inclusive start/exclusive end comparisons. Include the `to` calendar date through midnight of its following day; allow one-sided ranges.
 - Retain the approved list envelope `{ items, page, limit, total }`, default page 1/limit 20, maximum limit 100, and ordering `captured_at DESC, id ASC`. The default date field is `startTimestamp`. Date filters select timestamps, not proven event duration or shipment impact.
+
+### CP5 timezone clarification — approved 2026-10-03
+
+Recorded as D11 in the [MVP decision register](../product/mvp-scope.md#7-decision-register).
+
+- UTC is the standard for stored timestamp instants and internal service communication. Existing `TIMESTAMPTZ` columns remain unchanged; their session-dependent display does not change the stored instant.
+- `Europe/Berlin` interprets calendar-date filters for the German MVP. Convert parameterized local calendar boundaries inside repository SQL using an explicit `AT TIME ZONE 'Europe/Berlin'`, independent of the session timezone.
+- Calculate each local midnight independently, including midnight after the inclusive `to` date, before conversion. Do not add a fixed 24 hours to a converted UTC boundary; DST days may contain 23 or 25 hours.
+- Compare the resulting UTC instants directly against the existing indexed `TIMESTAMPTZ` column. Apply conversion to filter boundaries, not to stored column values.
+- Use existing PostgreSQL timezone support without adding a timezone dependency. This clarifies the conversion location; it does not change CP4 persistence semantics or authorize CP5 implementation.
 
 ## Isolated database verification
 
