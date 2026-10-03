@@ -1,12 +1,44 @@
 import { randomUUID } from 'node:crypto';
+import { readFileSync } from 'node:fs';
+import { join } from 'node:path';
 import { Test, TestingModule } from '@nestjs/testing';
 import { Client } from 'pg';
 import { DatabaseModule } from '../src/database/database.module';
 import { DatabaseService } from '../src/database/database.service';
 import { calculateDisruptionContentHash } from '../src/disruption/model/disruption-content-hash';
-import { Disruption } from '../src/disruption/model/disruption.model';
+import {
+  Disruption,
+  JsonObject,
+  JsonValue,
+} from '../src/disruption/model/disruption.model';
 import { PostgresDisruptionRepository } from '../src/disruption/repository/postgres-disruption.repository';
 import { getTestDatabaseUrl } from './database-test-context';
+
+interface AutobahnWarningFixture {
+  identifier: string;
+  source: string;
+  display_type: string;
+  title: string;
+  subtitle?: string;
+  description: JsonValue[];
+  startTimestamp?: string | null;
+  endTimestamp?: string | null;
+  future?: boolean;
+  abnormalTrafficType?: string;
+  delayTimeValue?: unknown;
+  averageSpeed?: unknown;
+  coordinate?: JsonValue;
+  geometry?: JsonValue;
+}
+
+const authenticA1Warnings = (
+  JSON.parse(
+    readFileSync(
+      join(process.cwd(), 'test/fixtures/autobahn/a1-warnings-2026-10.03.json'),
+      'utf8',
+    ),
+  ) as { warning: AutobahnWarningFixture[] }
+).warning;
 
 async function createClient(): Promise<Client> {
   const client = new Client({ connectionString: getTestDatabaseUrl() });
@@ -56,6 +88,56 @@ function createObservation(overrides: Partial<Disruption> = {}): Disruption {
     contentChangedAt: new Date('2026-10-03T07:00:00.000Z'),
     ...overrides,
   };
+}
+
+function providerTimestamp(
+  value: string | null | undefined,
+): Disruption['startTimestamp'] {
+  if (value === undefined) {
+    return { kind: 'omitted' };
+  }
+
+  if (value === null) {
+    return { kind: 'explicit-null' };
+  }
+
+  return { kind: 'value', value: new Date(value) };
+}
+
+function fixtureNumber(value: unknown): number | null {
+  return typeof value === 'number' ? value : null;
+}
+
+function createAuthenticWarningObservation(
+  warning: AutobahnWarningFixture,
+  overrides: Partial<Disruption> = {},
+): Disruption {
+  const capturedAt = new Date('2026-10-03T07:00:00.000Z');
+
+  return createObservation({
+    id: randomUUID(),
+    source: warning.source,
+    providerId: warning.identifier,
+    category: warning.display_type,
+    disruptionType: warning.abnormalTrafficType ?? 'WARNING',
+    queriedRoad: 'A1',
+    title: warning.title,
+    subtitle: warning.subtitle ?? null,
+    description: warning.description,
+    startTimestamp: providerTimestamp(warning.startTimestamp),
+    endTimestamp: providerTimestamp(warning.endTimestamp),
+    future: warning.future ?? null,
+    abnormalTrafficType: warning.abnormalTrafficType ?? null,
+    delayMinutes: fixtureNumber(warning.delayTimeValue),
+    averageSpeedKmh: fixtureNumber(warning.averageSpeed),
+    coordinate: warning.coordinate ?? null,
+    geometry: warning.geometry ?? null,
+    rawData: warning as unknown as JsonObject,
+    capturedAt,
+    lastSeenAt: capturedAt,
+    contentChangedAt: capturedAt,
+    ...overrides,
+  });
 }
 
 describe('PostgresDisruptionRepository', () => {
@@ -433,6 +515,8 @@ describe('PostgresDisruptionRepository', () => {
       repository.findActiveDisruptions({
         queriedRoad: 'A1',
         category: 'WARNING',
+        from: '2026-10-03',
+        to: '2026-10-03',
       }),
     ).resolves.toMatchObject({
       items: [matching.disruption],
@@ -521,6 +605,14 @@ describe('PostgresDisruptionRepository', () => {
         ),
       ),
     );
+    const newer = await repository.upsertObservation(
+      createObservation({
+        id: '00000000-0000-0000-0000-000000000004',
+        providerId: 'PAGED-NEWER',
+        capturedAt: new Date('2026-10-03T07:01:00.000Z'),
+        lastSeenAt: new Date('2026-10-03T07:01:00.000Z'),
+      }),
+    );
 
     const firstPage = await repository.findActiveDisruptions({
       page: 1,
@@ -535,15 +627,253 @@ describe('PostgresDisruptionRepository', () => {
       limit: 2,
     });
 
-    expect(firstPage).toMatchObject({ page: 1, limit: 2, total: 3 });
+    expect(firstPage).toMatchObject({ page: 1, limit: 2, total: 4 });
     expect(firstPage.items.map((item) => item.id)).toEqual([
+      newer.disruption.id,
       observations[1].disruption.id,
-      observations[2].disruption.id,
     ]);
-    expect(secondPage).toMatchObject({ page: 2, limit: 2, total: 3 });
+    expect(secondPage).toMatchObject({ page: 2, limit: 2, total: 4 });
     expect(secondPage.items.map((item) => item.id)).toEqual([
+      observations[2].disruption.id,
       observations[0].disruption.id,
     ]);
-    expect(emptyPage).toEqual({ items: [], page: 3, limit: 2, total: 3 });
+    expect(emptyPage).toEqual({ items: [], page: 3, limit: 2, total: 4 });
+  });
+
+  it('preserves authentic A1 warning text, raw payloads and complete geometry', async () => {
+    const stored = await Promise.all(
+      authenticA1Warnings.map((warning) =>
+        repository.upsertObservation(
+          createAuthenticWarningObservation(warning),
+        ),
+      ),
+    );
+
+    const page = await repository.findActiveDisruptions({
+      queriedRoad: 'A1',
+      category: 'WARNING',
+    });
+
+    expect(page.total).toBe(authenticA1Warnings.length);
+    for (const [index, warning] of authenticA1Warnings.entries()) {
+      const disruption = page.items.find(
+        (item) => item.providerId === warning.identifier,
+      );
+
+      expect(disruption).toMatchObject({
+        source: warning.source,
+        category: warning.display_type,
+        description: warning.description,
+        coordinate: warning.coordinate,
+        geometry: warning.geometry,
+        rawData: warning,
+      });
+      expect(disruption?.geometry).toEqual(warning.geometry);
+      expect(disruption?.rawData).toEqual(warning);
+      expect(disruption?.disruptionType).toBe(
+        warning.abnormalTrafficType ?? 'WARNING',
+      );
+      expect(stored[index].disruption.providerId).toBe(warning.identifier);
+    }
+  });
+
+  it('keeps omitted and explicit-null starts distinct and excludes both from start-date filtering', async () => {
+    const omitted = await repository.upsertObservation(
+      createObservation({
+        providerId: 'OMITTED-START',
+        startTimestamp: { kind: 'omitted' },
+      }),
+    );
+    const explicitNull = await repository.upsertObservation(
+      createObservation({
+        providerId: 'EXPLICIT-NULL-START',
+        startTimestamp: { kind: 'explicit-null' },
+      }),
+    );
+
+    const allActive = await repository.findActiveDisruptions();
+    const dateFiltered = await repository.findActiveDisruptions({
+      date: '2026-10-03',
+    });
+
+    expect(allActive.items).toEqual(
+      expect.arrayContaining([omitted.disruption, explicitNull.disruption]),
+    );
+    expect(dateFiltered).toEqual({ items: [], page: 1, limit: 20, total: 0 });
+    expect(omitted.disruption.startTimestamp).toEqual({ kind: 'omitted' });
+    expect(explicitNull.disruption.startTimestamp).toEqual({
+      kind: 'explicit-null',
+    });
+  });
+
+  it('applies one-sided calendar-date ranges', async () => {
+    const before = await repository.upsertObservation(
+      createObservation({
+        providerId: 'RANGE-BEFORE',
+        startTimestamp: {
+          kind: 'value',
+          value: new Date('2026-10-02T12:00:00.000Z'),
+        },
+      }),
+    );
+    const during = await repository.upsertObservation(
+      createObservation({
+        providerId: 'RANGE-DURING',
+        startTimestamp: {
+          kind: 'value',
+          value: new Date('2026-10-03T12:00:00.000Z'),
+        },
+      }),
+    );
+    const after = await repository.upsertObservation(
+      createObservation({
+        providerId: 'RANGE-AFTER',
+        startTimestamp: {
+          kind: 'value',
+          value: new Date('2026-10-04T12:00:00.000Z'),
+        },
+      }),
+    );
+
+    const from = await repository.findActiveDisruptions({
+      from: '2026-10-03',
+    });
+    const to = await repository.findActiveDisruptions({ to: '2026-10-03' });
+
+    expect(from.items.map((item) => item.id)).toEqual(
+      expect.arrayContaining([during.disruption.id, after.disruption.id]),
+    );
+    expect(from.items.map((item) => item.id)).not.toContain(
+      before.disruption.id,
+    );
+    expect(to.items.map((item) => item.id)).toEqual(
+      expect.arrayContaining([before.disruption.id, during.disruption.id]),
+    );
+    expect(to.items.map((item) => item.id)).not.toContain(after.disruption.id);
+  });
+
+  it('uses Berlin DST boundaries independently of PostgreSQL session timezone', async () => {
+    const days = [
+      {
+        date: '2026-03-29',
+        lower: '2026-03-28T23:00:00.000Z',
+        lastInside: '2026-03-29T21:59:59.999Z',
+        upper: '2026-03-29T22:00:00.000Z',
+      },
+      {
+        date: '2026-10-25',
+        lower: '2026-10-24T22:00:00.000Z',
+        lastInside: '2026-10-25T22:59:59.999Z',
+        upper: '2026-10-25T23:00:00.000Z',
+      },
+    ];
+    // Synthetic boundary records cover both the 23-hour and 25-hour days.
+    for (const day of days) {
+      for (const [position, timestamp] of [
+        ['lower', day.lower],
+        ['lastInside', day.lastInside],
+        ['upper', day.upper],
+      ]) {
+        await repository.upsertObservation(
+          createObservation({
+            providerId: `${day.date}-${position}`,
+            startTimestamp: { kind: 'value', value: new Date(timestamp) },
+          }),
+        );
+      }
+    }
+    const database = module.get(DatabaseService);
+    // Execute the real repository SQL on the client whose timezone is set.
+    const query = jest
+      .spyOn(database, 'query')
+      .mockImplementation((sql, values) => client.query(sql, values));
+
+    try {
+      for (const timezone of ['UTC', 'America/New_York']) {
+        const setting = await client.query<{ timezone: string }>(
+          "SELECT set_config('TimeZone', $1, false) AS timezone",
+          [timezone],
+        );
+        expect(setting.rows[0]?.timezone).toBe(timezone);
+
+        for (const day of days) {
+          const page = await repository.findActiveDisruptions({
+            date: day.date,
+          });
+          expect(page.total).toBe(2);
+          expect(page.items.map((item) => item.providerId).sort()).toEqual(
+            [`${day.date}-lower`, `${day.date}-lastInside`].sort(),
+          );
+        }
+      }
+    } finally {
+      query.mockRestore();
+    }
+  });
+
+  it('does not infer interval overlap or resolution from a missing end timestamp', async () => {
+    const disruption = await repository.upsertObservation(
+      createObservation({
+        providerId: 'MISSING-END',
+        startTimestamp: {
+          kind: 'value',
+          value: new Date('2026-10-02T12:00:00.000Z'),
+        },
+        endTimestamp: { kind: 'omitted' },
+      }),
+    );
+
+    await expect(
+      repository.findActiveDisruptions({ date: '2026-10-03' }),
+    ).resolves.toEqual({ items: [], page: 1, limit: 20, total: 0 });
+    await expect(repository.findActiveDisruptions()).resolves.toMatchObject({
+      items: [
+        expect.objectContaining({
+          id: disruption.disruption.id,
+          lifecycleStatus: 'ACTIVE',
+          endTimestamp: { kind: 'omitted' },
+        }),
+      ],
+      total: 1,
+    });
+  });
+
+  it('treats SQL-like filter values as literal parameters', async () => {
+    const literal = await repository.upsertObservation(
+      createObservation({
+        providerId: 'SQL-LITERAL',
+        queriedRoad: "A1' OR '1' = '1",
+        category: "WARNING' OR '1' = '1",
+      }),
+    );
+    await repository.upsertObservation(
+      createObservation({ providerId: 'ORDINARY-A1' }),
+    );
+
+    await expect(
+      repository.findActiveDisruptions({
+        queriedRoad: "A1' OR '1' = '1",
+        category: "WARNING' OR '1' = '1",
+      }),
+    ).resolves.toMatchObject({
+      items: [literal.disruption],
+      total: 1,
+    });
+  });
+
+  it('returns an empty page with a zero total when no disruptions match', async () => {
+    await repository.upsertObservation(createObservation());
+
+    await expect(
+      repository.findActiveDisruptions({ queriedRoad: 'A99' }),
+    ).resolves.toEqual({ items: [], page: 1, limit: 20, total: 0 });
+  });
+
+  it('propagates database query failures', async () => {
+    const database = module.get(DatabaseService);
+    const failure = new Error('controlled query failure');
+    jest.spyOn(database, 'query').mockRejectedValueOnce(failure);
+
+    await expect(repository.findActiveDisruptions()).rejects.toBe(failure);
   });
 });

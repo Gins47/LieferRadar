@@ -101,8 +101,8 @@ Build a demonstrable **AI-assisted logistics disruption copilot**. The system in
 | CP1 database infrastructure | Complete | Isolated PostgreSQL test runner and migrations |
 | CP2 logistics persistence | Complete | Schema and idempotent transactional fixtures |
 | CP3 PostgreSQL-backed shipment API | Complete | Shipment HTTP regressions |
-| CP4 disruption persistence | **Complete; latest changes not yet committed** | Reported: 19 unit, 25 isolated PostgreSQL, 4 shipment HTTP tests passed; concurrency, replay and rollback coverage |
-| CP5 disruption filtering | Next / not started | Query semantics, date boundaries and pagination |
+| CP4 disruption persistence | Complete | CP5.4 confirmed persistence/hash/write paths unchanged; concurrency, replay, timestamp merging and lifecycle regressions pass |
+| CP5 disruption filtering | Complete; final review changes uncommitted | CP5.4: 37 unit, 37 isolated PostgreSQL and 4 shipment HTTP tests passed; Berlin/DST boundaries, pagination and authentic warning preservation verified; see [Iteration 002](../iterations/002-autobahn-integration.md#cp5-implementation-and-verification) |
 | CP6 disruption REST endpoints | Not started | Expose stored warnings |
 | Official live Autobahn collection | Not started | Includes completeness-aware lifecycle handling |
 | Verified A1 route fixture + simulator | Agreed approach; not implemented | Route acquisition/verification and vehicle module |
@@ -110,7 +110,7 @@ Build a demonstrable **AI-assisted logistics disruption copilot**. The system in
 | Python disruption assessment | Not started | Existing Python service foundation to be reviewed |
 | Operator demonstration | Not started | Map, evidence and approval flow |
 
-**Maintenance:** The full lint run has one reported pre-existing unused `metadata` finding, separate from CP4. Verify current repository status before marking subsequent work complete.
+**Maintenance:** CP5.4 full lint confirms one pre-existing unused `metadata` finding; no CP5 lint regressions remain. TypeScript and production build passed. Verify current repository status before marking subsequent work complete.
 
 ## 6. Proposed delivery order
 
@@ -139,7 +139,7 @@ These are delivery stages, not promises of exact dates or a new checkpoint numbe
 | D08 | Mock vehicle simulation stays inside NestJS | Limits complexity | Approved |
 | D09 | Human approval before operational actions | Keeps operator in control | Approved |
 | D10 | No dynamic routing or real GPS integration in MVP | Keeps scope achievable | Approved |
-| D11 | UTC for stored timestamps and internal service communication; Europe/Berlin calendar boundaries converted independently inside PostgreSQL, with no new timezone dependency | Correct DST boundaries and comparisons against indexed TIMESTAMPTZ columns; clarifies §2C and CP5 without changing CP4 persistence semantics | Approved 2026-10-03; implementation pending |
+| D11 | UTC for stored timestamps and internal service communication; Europe/Berlin calendar boundaries converted independently inside PostgreSQL, with no new timezone dependency | Correct DST boundaries and comparisons against indexed TIMESTAMPTZ columns; clarifies §2C and CP5 without changing CP4 persistence semantics | Approved 2026-10-03; implemented and verified in CP5 |
 
 ## 8. Open concerns and validation gates
 

@@ -1,7 +1,7 @@
 # Iteration 002 — Autobahn Integration & Persistence
 
 **Project:** LieferRadar  
-**Status:** Phase 002A in progress — CP1–CP4 completed; CP5 next, awaiting approval<br>
+**Status:** Phase 002A in progress — CP1–CP5 completed; CP6 next, awaiting approval<br>
 **Dependency:** Iteration 001 — Completed  
 **Database:** PostgreSQL 18 with pgvector, running through Docker Compose
 
@@ -26,7 +26,7 @@ Approved database decisions are recorded in [Database architecture](../architect
 
 # Phase 002A — PostgreSQL Persistence & Retrieval
 
-**Status:** CP1–CP4 completed; CP5 next, awaiting approval
+**Status:** CP1–CP5 completed; CP6 next, awaiting approval
 
 **Goal:** Implement reliable database persistence and disruption retrieval independently of the external Autobahn API.
 
@@ -38,7 +38,7 @@ Approved database decisions are recorded in [Database architecture](../architect
 | CP2 | Supplier, Product and Shipment tables with explicit fixture seeding | Completed | Logistics migrations, idempotent fixture round-trip and CP2.3 verification in isolated PostgreSQL |
 | CP3 | PostgreSQL logistics repository and asynchronous shipment lookups | Completed | Unchanged shipment HTTP response, 404 and internal relationship-error behavior |
 | CP4 | Disruption table, indexes, inserts, upserts and identity lookups | Completed | Disruption schema, canonical model/hash, persistence behavior and identity lookups |
-| CP5 | A1 fixture-backed queries, Berlin date filtering and pagination | Not started | Authentic fixture retrieval, combined filters, timezone boundaries and stable ordering |
+| CP5 | A1 fixture-backed queries, Berlin date filtering and pagination | Completed | Authentic fixture retrieval, combined filters, timezone boundaries and stable ordering |
 | CP6 | Disruption retrieval module, DTOs, service and controller | Not started | List/detail HTTP contracts, query validation and shipment regression |
 | CP7 | Phase 002A acceptance and diff review | Not started | Complete checks and persistence after application restart; review before Phase 002B |
 
@@ -116,24 +116,37 @@ npm --prefix services/api run test:integration:cleanup
 - Actual final checks: unit tests passed (8 suites, 19 tests); isolated PostgreSQL tests passed (6 suites, 25 tests); real shipment HTTP tests passed (1 suite, 4 tests), including both complete shipment responses and unknown-ID 404. TypeScript and production build passed. Full lint was run without `--fix` and reports only the pre-existing unused `metadata` error in `src/common/pipes/zod-body-validation.pipe.ts:11`, also present in HEAD. No CP4 lint regression was found. The isolated runner removed its container and network; `git diff --check` passed.
 - Remaining assumptions: provider IDs are stable and unique within the configured source, including across categories; `lastSeenAt` is a trusted observation instant rather than an event start time or arbitrary replay execution time. One `queried_road` retains only the latest accepted query context; equal-time observations retain the first stored context. This does not establish an affected road or shipment impact.
 
-**Next checkpoint:** CP5 requires separate authorization. Stop for review before proceeding.
+**Next checkpoint after CP4:** CP5, subsequently completed as recorded below.
 
-### CP5 proposed implementation plan
+### CP5 implementation and verification
 
-**Status:** Not started. The timezone clarification below was approved on 2026-10-03; the remaining plan and implementation authorization are pending.
+**Status:** Completed — CP5.4 acceptance review, 2026-10-03. The query/page contract, PostgreSQL timezone approach and test-only WARNING subtype fallback were explicitly approved before implementation.
 
-| Step | Proposed scope | Verification gate |
-| ---- | -------------- | ----------------- |
-| CP5.1 | Application-owned query types and validation for queried road, category, calendar dates, selected timestamp and pagination | Focused unit tests for valid dates, exclusive date/range inputs, reversed ranges and pagination defaults/limits |
-| CP5.2 | Extend the existing repository with parameterized active-state filtering, PostgreSQL Berlin-to-UTC boundary conversion, deterministic ordering and paginated totals | Isolated PostgreSQL tests for combined filters, inclusive/exclusive UTC comparisons and accurate page totals |
-| CP5.3 | Authentic A1 warning retrieval and clearly labeled synthetic boundary controls | German descriptions/raw payload/GeoJSON preservation; missing timestamps; one-sided ranges; DST days; stable tie ordering and empty pages |
-| CP5.4 | Final acceptance review and actual verification record | Unit, isolated integration and existing shipment HTTP tests; TypeScript, build, non-mutating lint and scope/diff review |
+| Step | Delivered scope | Status | Verification gate |
+| ---- | --------------- | ------ | ----------------- |
+| CP5.1 | Application-owned query types and validation for queried road, category, calendar dates, selected timestamp and pagination | Completed | Focused unit tests for valid dates, exclusive date/range inputs, reversed ranges and pagination defaults/limits |
+| CP5.2 | Existing repository extended with parameterized active-state filtering, PostgreSQL Berlin-to-UTC boundary conversion, deterministic ordering and paginated totals | Completed | Isolated PostgreSQL tests for combined filters, inclusive/exclusive UTC comparisons and accurate page totals |
+| CP5.3 | Authentic A1 warning retrieval and clearly labeled synthetic boundary controls | Completed | German descriptions/raw payload/GeoJSON preservation; missing timestamps; one-sided ranges; DST days; stable tie ordering and empty pages |
+| CP5.4 | Final acceptance review and actual verification record | Completed | Unit, isolated integration and existing shipment HTTP tests; TypeScript, build, non-mutating lint and scope/diff review |
 
 The approved timezone approach uses PostgreSQL's existing timezone support; no application timezone library or custom offset algorithm is planned. UTC remains the standard for stored timestamp instants and internal service communication. Interpret calendar-date inputs with explicit `Europe/Berlin` inside repository SQL, calculate each local midnight independently, and compare converted boundaries directly against the existing indexed `TIMESTAMPTZ` columns. See [Database architecture](../architecture/database.md#cp5-timezone-clarification--approved-2026-10-03) and MVP decision D11.
 
-Planned timezone checks include lower-bound inclusion, upper-bound exclusion, the following local midnight for inclusive `to`, and both spring/autumn DST transitions under differing database session timezones. Missing starts remain excluded from start-date filtering without fallback; end timestamps do not introduce interval-overlap semantics. Reads retain the latest stored state and do not reconstruct historical versions.
+Verified timezone checks include lower-bound inclusion, upper-bound exclusion, the following local midnight for inclusive `to`, and both spring/autumn DST transitions under differing database session timezones. Missing starts remain excluded from start-date filtering without fallback; end timestamps do not introduce interval-overlap semantics. Reads retain the latest stored state and do not reconstruct historical versions.
 
-The proposed paginated repository return type and test-only subtype fallback remain subject to review. CP5 does not add HTTP endpoints, collection, automatic resolution, tracking, matching or AI analysis, and does not alter CP4 upsert, hashing or timestamp-merging behavior.
+CP5 does not add HTTP endpoints, collection, automatic resolution, tracking, matching or AI analysis, and does not alter CP4 upsert, hashing or timestamp-merging behavior.
+
+#### CP5.4 acceptance results — 2026-10-03
+
+- Query validation applies page 1, limit 20/max 100 and `startTimestamp` defaults, rejects conflicting dates/reversed ranges/invalid pagination, and supports optional road/category and selected timestamp filters. The repository returns `{ items, page, limit, total }`.
+- Reviewed SQL parameterization: road, category, date boundaries, limit and offset are bound values; timestamp column selection uses a fixed validated mapping. Timestamp comparisons leave the existing indexed columns unmodified. One CTE statement supplies page rows and total from the same snapshot, including zero matches and out-of-range pages.
+- Strengthened verification without changing production code: combined road/category/date-range filtering, capture ordering across different timestamps plus equal-time UUID ordering, and both DST days under UTC and America/New_York sessions. The DST test now executes repository SQL on the same client whose timezone is set; it includes the final millisecond of the autumn 25-hour day, so a fixed 24-hour cutoff would fail.
+- Confirmed all three authentic A1 warning entries retain their original German descriptions, complete coordinates/GeoJSON and raw provider-item JSON. Application test records use the approved WARNING fallback only when a structured subtype is absent. Synthetic capture metadata and boundary records are test assumptions, not historical provider evidence; no general provider normalization was introduced.
+- Actual checks passed: `npm test -- --runInBand` (9 suites, 37 tests), `npm run test:integration` (6 isolated database suites, 37 tests, then 1 real shipment HTTP suite, 4 tests), `npx tsc --noEmit`, `npm run build` and `git diff --check`. The isolated runner removed its temporary PostgreSQL container and network.
+- Full non-mutating lint (`npx eslint "{src,apps,libs,test}/**/*.ts"`) exits 1 only for the pre-existing unused `metadata` in `src/common/pipes/zod-body-validation.pipe.ts:11`, confirmed in the CP4 baseline commit. No CP5 lint findings remain.
+- Compared CP5 with the CP4 baseline: migration, disruption model/hash, database infrastructure, dependencies and authentic payload are unchanged. Repository row mapping and write paths remain intact; existing concurrency, replay/staleness, timestamp merging, explicit-null and lifecycle tests pass.
+- Remaining limits: latest state cannot reconstruct historical warnings; one `queriedRoad` retains only the latest retrieval context; offset pages can shift between separate requests when data changes. These are documented MVP assumptions, not shipment impact evidence. Full lint still needs separate cleanup of its existing finding.
+
+**Next checkpoint:** CP6 requires separate authorization. Stop for review before proceeding; no CP6 implementation or commit was created during CP5.4.
 
 ## A1. Database configuration
 
@@ -337,7 +350,7 @@ GET /disruptions?date=2026-10-03&dateField=capturedAt
 
 A date filter identifies events by their selected timestamp. It does not establish that they remained active throughout that date.
 
-Historical queries can only retrieve events that have already been collected or imported.
+Date queries select the latest stored state of collected or imported events by their current selected timestamp. They do not reconstruct historical versions or lifecycle state on the requested date.
 
 ### Retrieve an individual disruption
 
