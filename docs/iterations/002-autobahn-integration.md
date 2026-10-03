@@ -1,7 +1,7 @@
 # Iteration 002 — Autobahn Integration & Persistence
 
 **Project:** LieferRadar  
-**Status:** Phase 002A in progress — CP1 and CP2.1 completed; CP2.2 under review<br>
+**Status:** Phase 002A in progress — CP1 and CP2 completed; CP3 next<br>
 **Dependency:** Iteration 001 — Completed  
 **Database:** PostgreSQL 18 with pgvector, running through Docker Compose
 
@@ -26,7 +26,7 @@ Approved database decisions are recorded in [Database architecture](../architect
 
 # Phase 002A — PostgreSQL Persistence & Retrieval
 
-**Status:** CP1 and CP2.1 completed; CP2.2 under review, followed by CP2.3 verification
+**Status:** CP1 and CP2 completed; CP3 next, awaiting implementation authorization
 
 **Goal:** Implement reliable database persistence and disruption retrieval independently of the external Autobahn API.
 
@@ -35,7 +35,7 @@ Approved database decisions are recorded in [Database architecture](../architect
 | Checkpoint | Scope | Status | Acceptance gate |
 | ---------- | ----- | ------ | --------------- |
 | CP1 | Connection configuration, migration tooling and isolated PostgreSQL testing | Completed | Nest database-module connectivity, migration runner, existing HTTP tests and separate failure-cleanup verification |
-| CP2 | Supplier, Product and Shipment tables with explicit fixture seeding | In progress — CP2.1 completed; CP2.2 under review | Logistics migrations, idempotent fixture round-trip and CP2.3 verification in isolated PostgreSQL |
+| CP2 | Supplier, Product and Shipment tables with explicit fixture seeding | Completed | Logistics migrations, idempotent fixture round-trip and CP2.3 verification in isolated PostgreSQL |
 | CP3 | PostgreSQL logistics repository and asynchronous shipment lookups | Not started | Unchanged shipment HTTP response, 404 and internal relationship-error behavior |
 | CP4 | Disruption table, indexes, inserts, upserts and identity lookups | Not started | Deduplication, timestamps, provenance, nullable fields and raw-payload preservation |
 | CP5 | A1 fixture-backed queries, Berlin date filtering and pagination | Not started | Authentic fixture retrieval, combined filters, timezone boundaries and stable ordering |
@@ -60,6 +60,13 @@ Approved database decisions are recorded in [Database architecture](../architect
 - Preserved `SHP-001` unchanged and added the separately documented synthetic A1 `SHP-002` scenario.
 - Added isolated tests for exact fixture values, repeated seeding, and atomic rollback on both fixture-group conflicts.
 
+### CP2.3 completion record
+
+- Verified the migration's isolated up/down/up lifecycle, exact fixture seeding, repeated-seed idempotency and atomic rollback for conflicts in both fixture groups.
+- Ran unit tests (6 suites, 10 tests), isolated database tests (3 suites, 7 tests) and HTTP regression tests (1 suite, 3 tests). All passed.
+- TypeScript checking and the production build passed. The full non-mutating lint check still reports seven errors and one warning in Iteration 001 files: the Zod validation pipe, application bootstrap and shipment service spec. CP2 introduced no lint findings.
+- Confirmed the `SHP-001` HTTP response is unchanged and `SHP-002` matches the documented synthetic Lübeck-to-Hamburg A1 scenario.
+
 Previously executed CP1 checks: database connectivity (1 test), existing HTTP tests (3 tests), unit tests (10 tests), TypeScript checks, build, test Compose configuration and separate failure-cleanup verification passed. CP1 TypeScript files passed lint; the full project had existing lint findings in the validation pipe, bootstrap and shipment spec. These are historical results, not checks executed by a documentation update.
 
 From the repository root:
@@ -69,7 +76,7 @@ npm --prefix services/api run test:integration
 npm --prefix services/api run test:integration:cleanup
 ```
 
-**Current checkpoint:** CP2.2 fixture seeding is under review. CP2.3 verification remains required before CP3 introduces PostgreSQL logistics repository lookups. CP3 must preserve the shipment HTTP contract and does not add disruption storage or collection. Stop for review at each authorized checkpoint.
+**Next checkpoint:** CP3 introduces PostgreSQL logistics repository lookups. It must preserve the shipment HTTP contract and does not add disruption storage or collection. Stop for review at each authorized checkpoint.
 
 ## A1. Database configuration
 
