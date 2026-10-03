@@ -1,7 +1,7 @@
 # Iteration 002 — Autobahn Integration & Persistence
 
 **Project:** LieferRadar  
-**Status:** Phase 002A in progress — CP1, CP2 and CP3 completed; CP4.1 completed, awaiting review<br>
+**Status:** Phase 002A in progress — CP1, CP2 and CP3 completed; CP4.1 and CP4.2 completed, awaiting review<br>
 **Dependency:** Iteration 001 — Completed  
 **Database:** PostgreSQL 18 with pgvector, running through Docker Compose
 
@@ -26,7 +26,7 @@ Approved database decisions are recorded in [Database architecture](../architect
 
 # Phase 002A — PostgreSQL Persistence & Retrieval
 
-**Status:** CP1, CP2 and CP3 completed; CP4.1 completed, awaiting review
+**Status:** CP1, CP2 and CP3 completed; CP4.1 and CP4.2 completed, awaiting review
 
 **Goal:** Implement reliable database persistence and disruption retrieval independently of the external Autobahn API.
 
@@ -37,7 +37,7 @@ Approved database decisions are recorded in [Database architecture](../architect
 | CP1 | Connection configuration, migration tooling and isolated PostgreSQL testing | Completed | Nest database-module connectivity, migration runner, existing HTTP tests and separate failure-cleanup verification |
 | CP2 | Supplier, Product and Shipment tables with explicit fixture seeding | Completed | Logistics migrations, idempotent fixture round-trip and CP2.3 verification in isolated PostgreSQL |
 | CP3 | PostgreSQL logistics repository and asynchronous shipment lookups | Completed | Unchanged shipment HTTP response, 404 and internal relationship-error behavior |
-| CP4 | Disruption table, indexes, inserts, upserts and identity lookups | In progress — CP4.1 completed | Disruption schema, then deduplication, timestamps, provenance, nullable fields and raw-payload preservation |
+| CP4 | Disruption table, indexes, inserts, upserts and identity lookups | In progress — CP4.1 and CP4.2 completed | Disruption schema, canonical model/hash, then persistence behavior and identity lookups |
 | CP5 | A1 fixture-backed queries, Berlin date filtering and pagination | Not started | Authentic fixture retrieval, combined filters, timezone boundaries and stable ordering |
 | CP6 | Disruption retrieval module, DTOs, service and controller | Not started | List/detail HTTP contracts, query validation and shipment regression |
 | CP7 | Phase 002A acceptance and diff review | Not started | Complete checks and persistence after application restart; review before Phase 002B |
@@ -93,7 +93,14 @@ npm --prefix services/api run test:integration:cleanup
 - Current checks passed: unit tests (7 suites, 12 tests), TypeScript check, focused migration-test lint, production build, isolated database tests (5 suites, 13 tests) and PostgreSQL-backed HTTP regression tests (1 suite, 4 tests). The integration runner removed its temporary container and network.
 - Full non-mutating lint still has one pre-existing error: unused `metadata` in `services/api/src/common/pipes/zod-body-validation.pipe.ts:11`. No CP4.1 file has a lint finding.
 
-**Next checkpoint:** CP4.2 may add the approved hashing and persistence behavior after review. Do not begin it without separate authorization.
+### CP4.2 completion record — 2026-10-03
+
+- Added an application-owned disruption model and a deterministic SHA-256 hash for interpretation-relevant warning content. Provider DTO validation and normalization remain outside this model.
+- Hash canonicalization sorts object keys recursively while retaining array order, including German description entries and GeoJSON coordinates. The hash includes warning content, provider timestamp state and `queried_road`; it excludes identity, raw payload, lifecycle and collection metadata.
+- `(source, provider_id)` remains the persistence identity and is deliberately excluded from its content hash. A later queried-road update produces a new content hash but does not itself establish impact. Historical replay capture and observation timestamps are excluded; provider timestamps, including omitted versus explicit-null state, remain in the hash.
+- No PostgreSQL repository, upsert behavior, collection, resolution processing, HTTP endpoints, matching or AI integration was added.
+
+**Next checkpoint:** CP4.3 requires separate authorization. Do not begin it without review.
 
 ## A1. Database configuration
 
