@@ -23,6 +23,8 @@ The backend executes approved actions.
 - Reuse existing infrastructure before rewriting it.
 - Do not introduce new infrastructure without a concrete requirement.
 
+Database decisions are recorded in [Database architecture](docs/architecture/database.md).
+
 ## Migration
 
 This repository is being migrated from a refund/customer-support
@@ -38,6 +40,9 @@ Before replacing existing code:
 See `docs/migration.md` for the migration plan.
 
 ## Development
+
+For planning, implementing, or reviewing an iteration checkpoint, use the
+[iteration-workflow skill](.agents/skills/iteration-workflow/SKILL.md).
 
 For substantial changes:
 
