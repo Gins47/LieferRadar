@@ -10,6 +10,12 @@ import {
   JsonValue,
   ProviderTimestamp,
 } from '../model/disruption.model';
+import {
+  ActiveDisruptionQuery,
+  DisruptionDateField,
+  DisruptionPage,
+  parseActiveDisruptionQuery,
+} from './disruption-query';
 
 export type DisruptionObservationOutcome = 'NEW' | 'CHANGED' | 'UNCHANGED';
 
@@ -78,6 +84,14 @@ const SELECT_DISRUPTION_COLUMNS = `
   last_seen_at AS "lastSeenAt",
   last_live_seen_at AS "lastLiveSeenAt",
   content_changed_at AS "contentChangedAt"`;
+
+const DATE_FIELD_COLUMNS: Record<
+  DisruptionDateField,
+  'captured_at' | 'start_timestamp'
+> = {
+  startTimestamp: 'start_timestamp',
+  capturedAt: 'captured_at',
+};
 
 function mapProviderTimestamp(
   value: Date | null,
@@ -233,6 +247,53 @@ function queryValues(disruption: Disruption): unknown[] {
   ];
 }
 
+function createActiveDisruptionQuery(query: ActiveDisruptionQuery): {
+  conditions: string[];
+  values: unknown[];
+} {
+  const conditions = ["lifecycle_status = 'ACTIVE'"];
+  const values: unknown[] = [];
+  const parameter = (value: unknown): string => {
+    values.push(value);
+    return `$${values.length}`;
+  };
+
+  if (query.queriedRoad) {
+    conditions.push(`queried_road = ${parameter(query.queriedRoad)}`);
+  }
+
+  if (query.category) {
+    conditions.push(`category = ${parameter(query.category)}`);
+  }
+
+  const dateColumn = DATE_FIELD_COLUMNS[query.dateField];
+  if (query.date) {
+    const date = parameter(query.date);
+    conditions.push(
+      `${dateColumn} >= (${date}::date::timestamp AT TIME ZONE 'Europe/Berlin')`,
+    );
+    conditions.push(
+      `${dateColumn} < ((${date}::date + 1)::timestamp AT TIME ZONE 'Europe/Berlin')`,
+    );
+  }
+
+  if (query.from) {
+    const from = parameter(query.from);
+    conditions.push(
+      `${dateColumn} >= (${from}::date::timestamp AT TIME ZONE 'Europe/Berlin')`,
+    );
+  }
+
+  if (query.to) {
+    const to = parameter(query.to);
+    conditions.push(
+      `${dateColumn} < ((${to}::date + 1)::timestamp AT TIME ZONE 'Europe/Berlin')`,
+    );
+  }
+
+  return { conditions, values };
+}
+
 @Injectable()
 export class PostgresDisruptionRepository {
   constructor(private readonly database: DatabaseService) {}
@@ -299,15 +360,41 @@ export class PostgresDisruptionRepository {
     return result.rows[0] ? mapDisruption(result.rows[0]) : undefined;
   }
 
-  async findActiveDisruptions(): Promise<Disruption[]> {
-    const result = await this.database.query<DisruptionRow>(
-      `SELECT ${SELECT_DISRUPTION_COLUMNS}
-      FROM disruptions
-      WHERE lifecycle_status = 'ACTIVE'
-      ORDER BY captured_at DESC, id ASC`,
+  async findActiveDisruptions(
+    input: Partial<ActiveDisruptionQuery> = {},
+  ): Promise<DisruptionPage> {
+    const query = parseActiveDisruptionQuery(input);
+    const { conditions, values } = createActiveDisruptionQuery(query);
+    const limit = `$${values.push(query.limit)}`;
+    const offset = `$${values.push((query.page - 1) * query.limit)}`;
+    const result = await this.database.query<DisruptionRow & { total: number }>(
+      `WITH filtered AS (
+        SELECT ${SELECT_DISRUPTION_COLUMNS}
+        FROM disruptions
+        WHERE ${conditions.join('\n          AND ')}
+      ), total AS (
+        SELECT count(*)::integer AS total
+        FROM filtered
+      ), paged AS (
+        SELECT *
+        FROM filtered
+        ORDER BY "capturedAt" DESC, id ASC
+        LIMIT ${limit} OFFSET ${offset}
+      )
+      SELECT total.total, paged.*
+      FROM total
+      LEFT JOIN paged ON TRUE
+      ORDER BY paged."capturedAt" DESC NULLS LAST, paged.id ASC NULLS LAST`,
+      values,
     );
+    const first = result.rows[0];
 
-    return result.rows.map(mapDisruption);
+    return {
+      items: result.rows.filter((row) => row.id !== null).map(mapDisruption),
+      page: query.page,
+      limit: query.limit,
+      total: first?.total ?? 0,
+    };
   }
 
   private async insert(

@@ -98,9 +98,12 @@ describe('PostgresDisruptionRepository', () => {
         observation.providerId,
       ),
     ).resolves.toEqual(result.disruption);
-    await expect(repository.findActiveDisruptions()).resolves.toEqual([
-      result.disruption,
-    ]);
+    await expect(repository.findActiveDisruptions()).resolves.toEqual({
+      items: [result.disruption],
+      page: 1,
+      limit: 20,
+      total: 1,
+    });
   });
 
   it('advances an unchanged observation without changing its content version', async () => {
@@ -296,9 +299,12 @@ describe('PostgresDisruptionRepository', () => {
       }),
     );
 
-    await expect(repository.findActiveDisruptions()).resolves.toEqual([
-      active.disruption,
-    ]);
+    await expect(repository.findActiveDisruptions()).resolves.toEqual({
+      items: [active.disruption],
+      page: 1,
+      limit: 20,
+      total: 1,
+    });
   });
 
   it('preserves the newest observation during concurrent updates', async () => {
@@ -386,7 +392,7 @@ describe('PostgresDisruptionRepository', () => {
     await repository.upsertObservation(
       createObservation({ source: 'another-provider' }),
     );
-    expect(await repository.findActiveDisruptions()).toHaveLength(2);
+    expect((await repository.findActiveDisruptions()).items).toHaveLength(2);
     await expect(
       repository.findByProviderIdentity(
         "autobahn' OR '1' = '1",
@@ -399,5 +405,145 @@ describe('PostgresDisruptionRepository', () => {
         "missing' OR '1' = '1",
       ),
     ).resolves.toBeUndefined();
+  });
+
+  it('filters active disruptions by queried road and category', async () => {
+    const matching = await repository.upsertObservation(
+      createObservation({ providerId: 'A1-WARNING' }),
+    );
+    await repository.upsertObservation(
+      createObservation({
+        providerId: 'A1-CLOSURE',
+        category: 'CLOSURE',
+        disruptionType: 'CLOSURE',
+      }),
+    );
+    await repository.upsertObservation(
+      createObservation({ providerId: 'A8-WARNING', queriedRoad: 'A8' }),
+    );
+    await repository.upsertObservation(
+      createObservation({
+        providerId: 'A1-RESOLVED',
+        lifecycleStatus: 'RESOLVED',
+        resolvedAt: new Date('2026-10-03T07:00:00.000Z'),
+      }),
+    );
+
+    await expect(
+      repository.findActiveDisruptions({
+        queriedRoad: 'A1',
+        category: 'WARNING',
+      }),
+    ).resolves.toMatchObject({
+      items: [matching.disruption],
+      total: 1,
+    });
+  });
+
+  it('uses inclusive Berlin lower bounds and exclusive upper bounds', async () => {
+    const lowerBound = await repository.upsertObservation(
+      createObservation({
+        providerId: 'BERLIN-LOWER-BOUND',
+        startTimestamp: {
+          kind: 'value',
+          value: new Date('2026-10-02T22:00:00.000Z'),
+        },
+      }),
+    );
+    await repository.upsertObservation(
+      createObservation({
+        providerId: 'BERLIN-BEFORE-BOUND',
+        startTimestamp: {
+          kind: 'value',
+          value: new Date('2026-10-02T21:59:59.999Z'),
+        },
+      }),
+    );
+    await repository.upsertObservation(
+      createObservation({
+        providerId: 'BERLIN-UPPER-BOUND',
+        startTimestamp: {
+          kind: 'value',
+          value: new Date('2026-10-03T22:00:00.000Z'),
+        },
+      }),
+    );
+
+    await expect(
+      repository.findActiveDisruptions({ date: '2026-10-03' }),
+    ).resolves.toMatchObject({
+      items: [lowerBound.disruption],
+      total: 1,
+    });
+  });
+
+  it('filters by the selected capture timestamp field', async () => {
+    const matching = await repository.upsertObservation(
+      createObservation({
+        providerId: 'CAPTURED-ON-OCTOBER-THIRD',
+        startTimestamp: {
+          kind: 'value',
+          value: new Date('2026-10-01T12:00:00.000Z'),
+        },
+        capturedAt: new Date('2026-10-02T22:00:00.000Z'),
+        lastSeenAt: new Date('2026-10-02T22:00:00.000Z'),
+        contentChangedAt: new Date('2026-10-02T22:00:00.000Z'),
+      }),
+    );
+
+    await expect(
+      repository.findActiveDisruptions({
+        date: '2026-10-03',
+        dateField: 'capturedAt',
+      }),
+    ).resolves.toMatchObject({
+      items: [matching.disruption],
+      total: 1,
+    });
+  });
+
+  it('paginates with accurate totals and deterministic capture-time ordering', async () => {
+    const captureTime = new Date('2026-10-03T07:00:00.000Z');
+    const observations = await Promise.all(
+      [
+        ['00000000-0000-0000-0000-000000000003', 'PAGED-THREE'],
+        ['00000000-0000-0000-0000-000000000001', 'PAGED-ONE'],
+        ['00000000-0000-0000-0000-000000000002', 'PAGED-TWO'],
+      ].map(([id, providerId]) =>
+        repository.upsertObservation(
+          createObservation({
+            id,
+            providerId,
+            capturedAt: captureTime,
+            lastSeenAt: captureTime,
+            contentChangedAt: captureTime,
+          }),
+        ),
+      ),
+    );
+
+    const firstPage = await repository.findActiveDisruptions({
+      page: 1,
+      limit: 2,
+    });
+    const secondPage = await repository.findActiveDisruptions({
+      page: 2,
+      limit: 2,
+    });
+    const emptyPage = await repository.findActiveDisruptions({
+      page: 3,
+      limit: 2,
+    });
+
+    expect(firstPage).toMatchObject({ page: 1, limit: 2, total: 3 });
+    expect(firstPage.items.map((item) => item.id)).toEqual([
+      observations[1].disruption.id,
+      observations[2].disruption.id,
+    ]);
+    expect(secondPage).toMatchObject({ page: 2, limit: 2, total: 3 });
+    expect(secondPage.items.map((item) => item.id)).toEqual([
+      observations[0].disruption.id,
+    ]);
+    expect(emptyPage).toEqual({ items: [], page: 3, limit: 2, total: 3 });
   });
 });
