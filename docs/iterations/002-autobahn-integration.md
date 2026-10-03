@@ -1,7 +1,7 @@
 # Iteration 002 — Autobahn Integration & Persistence
 
 **Project:** LieferRadar  
-**Status:** Phase 002A in progress — CP1 completed; CP2 next  
+**Status:** Phase 002A in progress — CP1 and CP2.1 completed; CP2.2 under review<br>
 **Dependency:** Iteration 001 — Completed  
 **Database:** PostgreSQL 18 with pgvector, running through Docker Compose
 
@@ -26,7 +26,7 @@ Approved database decisions are recorded in [Database architecture](../architect
 
 # Phase 002A — PostgreSQL Persistence & Retrieval
 
-**Status:** CP1 completed; CP2 next, awaiting implementation authorization
+**Status:** CP1 and CP2.1 completed; CP2.2 under review, followed by CP2.3 verification
 
 **Goal:** Implement reliable database persistence and disruption retrieval independently of the external Autobahn API.
 
@@ -35,7 +35,7 @@ Approved database decisions are recorded in [Database architecture](../architect
 | Checkpoint | Scope | Status | Acceptance gate |
 | ---------- | ----- | ------ | --------------- |
 | CP1 | Connection configuration, migration tooling and isolated PostgreSQL testing | Completed | Nest database-module connectivity, migration runner, existing HTTP tests and separate failure-cleanup verification |
-| CP2 | Supplier, Product and Shipment tables with explicit fixture seeding | Next — not started | Logistics migrations and idempotent fixture round-trip in isolated PostgreSQL |
+| CP2 | Supplier, Product and Shipment tables with explicit fixture seeding | In progress — CP2.1 completed; CP2.2 under review | Logistics migrations, idempotent fixture round-trip and CP2.3 verification in isolated PostgreSQL |
 | CP3 | PostgreSQL logistics repository and asynchronous shipment lookups | Not started | Unchanged shipment HTTP response, 404 and internal relationship-error behavior |
 | CP4 | Disruption table, indexes, inserts, upserts and identity lookups | Not started | Deduplication, timestamps, provenance, nullable fields and raw-payload preservation |
 | CP5 | A1 fixture-backed queries, Berlin date filtering and pagination | Not started | Authentic fixture retrieval, combined filters, timezone boundaries and stable ordering |
@@ -47,7 +47,18 @@ Approved database decisions are recorded in [Database architecture](../architect
 - Added `pg`, `node-pg-migrate` and an injectable database module with pool cleanup. The module remains outside `AppModule`; existing logistics repositories remain in memory.
 - Added `services/api/docker-compose.test.yaml` and a minimal runner using a unique Compose project, generated credentials, a dynamic loopback port, health waiting and temporary `tmpfs` storage. Development PostgreSQL is untouched by the workflow.
 - The runner executes migrations and database/HTTP tests, then removes its own resources on success or failure. Cleanup verification is a separate command; the connectivity test has no intentional failure branch.
-- Added the versioned migration directory and command. There are no application schema migrations yet; CP1 execution reports "No migrations to run".
+- Added the versioned migration directory and command. At CP1 execution, there were no application schema migrations and the command reported "No migrations to run".
+
+### CP2.1 completion record
+
+- Added versioned Supplier, Product and Shipment tables with foreign keys and the approved location, route, status, quantity and timing constraints.
+- Added `migrate:down` and an isolated migration test that verifies table creation and safe rollback/reapplication.
+
+### CP2.2 implementation record
+
+- Added explicit, idempotent Supplier, Product and Shipment fixture seeding through a development-only command; the running application still uses in-memory logistics fixtures.
+- Preserved `SHP-001` unchanged and added the separately documented synthetic A1 `SHP-002` scenario.
+- Added isolated tests for exact fixture values, repeated seeding, and atomic rollback on both fixture-group conflicts.
 
 Previously executed CP1 checks: database connectivity (1 test), existing HTTP tests (3 tests), unit tests (10 tests), TypeScript checks, build, test Compose configuration and separate failure-cleanup verification passed. CP1 TypeScript files passed lint; the full project had existing lint findings in the validation pipe, bootstrap and shipment spec. These are historical results, not checks executed by a documentation update.
 
@@ -58,7 +69,7 @@ npm --prefix services/api run test:integration
 npm --prefix services/api run test:integration:cleanup
 ```
 
-**Next checkpoint:** CP2 adds only logistics tables and explicit development/test fixtures. It does not switch the running application to PostgreSQL; that is CP3. Stop for review at each authorized checkpoint.
+**Current checkpoint:** CP2.2 fixture seeding is under review. CP2.3 verification remains required before CP3 introduces PostgreSQL logistics repository lookups. CP3 must preserve the shipment HTTP contract and does not add disruption storage or collection. Stop for review at each authorized checkpoint.
 
 ## A1. Database configuration
 
@@ -266,7 +277,7 @@ Before implementing the Autobahn integration, prepare representative fixtures.
 
 Include:
 
-1. The authentic A1 accident, queuing-traffic and slow-traffic warnings with directional information and LineString geometry in [the supplied fixture](../../services/api/test/fixtures/autobhan/a1-warnings-2026-10.03.json).
+1. The authentic A1 accident, queuing-traffic and slow-traffic warnings with directional information and LineString geometry in [the supplied fixture](../../services/api/test/fixtures/autobahn/a1-warnings-2026-10.03.json).
 2. A closure response.
 3. An event containing missing optional fields.
 
