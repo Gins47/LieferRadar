@@ -1,7 +1,7 @@
 # Iteration 002 — Autobahn Integration & Persistence
 
 **Project:** LieferRadar  
-**Status:** Phase 002A in progress — CP1, CP2 and CP3 completed; CP4 next<br>
+**Status:** Phase 002A in progress — CP1, CP2 and CP3 completed; CP4.1 completed, awaiting review<br>
 **Dependency:** Iteration 001 — Completed  
 **Database:** PostgreSQL 18 with pgvector, running through Docker Compose
 
@@ -26,7 +26,7 @@ Approved database decisions are recorded in [Database architecture](../architect
 
 # Phase 002A — PostgreSQL Persistence & Retrieval
 
-**Status:** CP1, CP2 and CP3 completed; CP4 next, awaiting implementation authorization
+**Status:** CP1, CP2 and CP3 completed; CP4.1 completed, awaiting review
 
 **Goal:** Implement reliable database persistence and disruption retrieval independently of the external Autobahn API.
 
@@ -37,7 +37,7 @@ Approved database decisions are recorded in [Database architecture](../architect
 | CP1 | Connection configuration, migration tooling and isolated PostgreSQL testing | Completed | Nest database-module connectivity, migration runner, existing HTTP tests and separate failure-cleanup verification |
 | CP2 | Supplier, Product and Shipment tables with explicit fixture seeding | Completed | Logistics migrations, idempotent fixture round-trip and CP2.3 verification in isolated PostgreSQL |
 | CP3 | PostgreSQL logistics repository and asynchronous shipment lookups | Completed | Unchanged shipment HTTP response, 404 and internal relationship-error behavior |
-| CP4 | Disruption table, indexes, inserts, upserts and identity lookups | Not started | Deduplication, timestamps, provenance, nullable fields and raw-payload preservation |
+| CP4 | Disruption table, indexes, inserts, upserts and identity lookups | In progress — CP4.1 completed | Disruption schema, then deduplication, timestamps, provenance, nullable fields and raw-payload preservation |
 | CP5 | A1 fixture-backed queries, Berlin date filtering and pagination | Not started | Authentic fixture retrieval, combined filters, timezone boundaries and stable ordering |
 | CP6 | Disruption retrieval module, DTOs, service and controller | Not started | List/detail HTTP contracts, query validation and shipment regression |
 | CP7 | Phase 002A acceptance and diff review | Not started | Complete checks and persistence after application restart; review before Phase 002B |
@@ -85,7 +85,15 @@ npm --prefix services/api run test:integration:cleanup
 - Test mode requires isolated runner configuration. Controlled failure-cleanup verification passed, removing its container and network. Migrations and seeding remain explicit, and HTTP tests seed their own isolated state once per suite.
 - Final review identified and corrected a build-layout defect: `scripts/` is excluded from the Nest application build so the existing production command can find `dist/main.js`. Scripts still execute separately through their npm commands. Development and production instructions are updated in `services/api/README.md`.
 
-**Next checkpoint:** CP4 introduces disruption storage, indexes and identity lookups. It requires separate authorization. Stop for review at each checkpoint.
+### CP4.1 completion record — 2026-10-03
+
+- Added the `disruptions` migration with `(source, provider_id)` identity, `queried_road`, original German information, GeoJSON and raw provider payload storage, nullable traffic fields, canonical content-hash storage, timestamp-presence flags, lifecycle fields and observation timestamps.
+- Added the unique identity index plus indexes for provider start time, capture time and queried-road/lifecycle/category/start-time retrieval. The migration does not add hashing, a repository, collection, resolution execution, matching or AI integration.
+- Added focused isolated migration tests for creation, rollback and reapplication. The rollback test confirms that existing Supplier, Product and Shipment tables remain intact. The existing logistics rollback test now steps past the newer disruption migration and restores both migrations in `finally`.
+- Current checks passed: unit tests (7 suites, 12 tests), TypeScript check, focused migration-test lint, production build, isolated database tests (5 suites, 13 tests) and PostgreSQL-backed HTTP regression tests (1 suite, 4 tests). The integration runner removed its temporary container and network.
+- Full non-mutating lint still has one pre-existing error: unused `metadata` in `services/api/src/common/pipes/zod-body-validation.pipe.ts:11`. No CP4.1 file has a lint finding.
+
+**Next checkpoint:** CP4.2 may add the approved hashing and persistence behavior after review. Do not begin it without separate authorization.
 
 ## A1. Database configuration
 
@@ -142,14 +150,18 @@ Create a `disruptions` table.
 | Column          | PostgreSQL type | Description                        |
 | --------------- | --------------- | ---------------------------------- |
 | id              | UUID            | Internal primary key               |
-| provider_id     | TEXT            | External event identifier          |
 | source          | TEXT            | Original provider                  |
+| provider_id     | TEXT            | External event identifier          |
 | category        | TEXT            | WARNING or CLOSURE                 |
-| road            | TEXT            | Motorway identifier                |
+| disruption_type | TEXT            | Provider event type                |
+| queried_road    | TEXT            | Motorway used for retrieval        |
 | title           | TEXT            | Original event title               |
 | subtitle        | TEXT            | Original directional subtitle      |
 | description     | JSONB           | Original German description        |
 | start_timestamp | TIMESTAMPTZ     | Provider-reported event start      |
+| start_timestamp_present | BOOLEAN  | Whether the provider supplied start |
+| end_timestamp   | TIMESTAMPTZ     | Provider-reported event end        |
+| end_timestamp_present | BOOLEAN    | Whether the provider supplied end  |
 | future          | BOOLEAN         | Provider-reported future indicator |
 | abnormal_traffic_type | TEXT      | Nullable provider traffic type     |
 | delay_minutes   | INTEGER         | Nullable reported delay in minutes |
@@ -157,9 +169,14 @@ Create a `disruptions` table.
 | coordinate      | JSONB           | Original event coordinate          |
 | geometry        | JSONB           | Original GeoJSON geometry          |
 | raw_data        | JSONB           | Complete original API payload      |
+| content_hash    | TEXT            | Canonical interpretation-relevant SHA-256 |
+| lifecycle_status | TEXT           | ACTIVE or RESOLVED                 |
+| resolved_at     | TIMESTAMPTZ     | Resolution timestamp, when resolved |
 | ingestion_mode  | TEXT            | LIVE or REPLAY                     |
-| captured_at     | TIMESTAMPTZ     | First ingestion timestamp          |
-| last_seen_at    | TIMESTAMPTZ     | Most recent observation            |
+| captured_at     | TIMESTAMPTZ     | First capture timestamp            |
+| last_seen_at    | TIMESTAMPTZ     | Most recent accepted observation   |
+| last_live_seen_at | TIMESTAMPTZ   | Most recent live observation       |
+| content_changed_at | TIMESTAMPTZ  | Most recent content version        |
 
 Use nullable fields where the external API does not guarantee values.
 
@@ -173,9 +190,15 @@ GeoJSON uses `[longitude, latitude]` coordinate ordering. Do not reverse coordin
 
 ### Ingestion provenance
 
-`ingestion_mode` distinguishes live collection from historical replay.
+`ingestion_mode` distinguishes live collection from historical replay. `queried_road` records retrieval context, not a conclusion that every carriageway or route is affected.
 
-If a previously replayed event is subsequently observed through the live API, update its provenance appropriately without modifying its original provider timestamp.
+The identity is `(source, provider_id)`. `content_hash` is a canonical hash of fields relevant to later interpretation; it does not preclude assessment of a newly relevant shipment.
+
+Presence flags distinguish an omitted provider timestamp from an explicit `null`. Later provider timestamp corrections may update the stored provider timestamp.
+
+If a previously replayed event is subsequently observed through the live API, update its provenance appropriately. Stale observations and replay data must not overwrite newer live state.
+
+The provisional resolution policy requires absence from two consecutive complete, successful collections for the same source and queried road. Failed or incomplete collections never resolve a warning. CP4.1 stores lifecycle fields only; it does not execute resolution.
 
 Preserve the original payload for traceability.
 
@@ -184,8 +207,8 @@ Preserve the original payload for traceability.
 Create the following indexes through database migrations:
 
 ```sql
-CREATE UNIQUE INDEX idx_disruptions_provider_category
-ON disruptions(provider_id, category);
+CREATE UNIQUE INDEX idx_disruptions_source_provider_id
+ON disruptions(source, provider_id);
 
 CREATE INDEX idx_disruptions_start_timestamp
 ON disruptions(start_timestamp);
@@ -193,15 +216,15 @@ ON disruptions(start_timestamp);
 CREATE INDEX idx_disruptions_captured_at
 ON disruptions(captured_at);
 
-CREATE INDEX idx_disruptions_road_category_start
-ON disruptions(road, category, start_timestamp);
+CREATE INDEX idx_disruptions_queried_road_lifecycle_category_start
+ON disruptions(queried_road, lifecycle_status, category, start_timestamp);
 ```
 
 The unique index prevents duplicate disruption records.
 
 Timestamp indexes support date-based retrieval.
 
-The composite index supports filtering by motorway, category and event start date.
+The composite index supports filtering by queried motorway, lifecycle, category and event start date.
 
 Do not introduce PostGIS or additional spatial indexes in this iteration.
 
@@ -212,7 +235,7 @@ Implement a PostgreSQL-backed disruption repository supporting:
 - Insert.
 - Upsert.
 - Retrieve by internal UUID.
-- Retrieve by provider identifier and category.
+- Retrieve by source and provider identifier.
 - Filter by motorway and category.
 - Filter by date or date range.
 - Paginated retrieval.
@@ -223,7 +246,10 @@ Upsert behavior:
 - Update existing events without creating duplicates.
 - Preserve `captured_at`.
 - Update `last_seen_at` when the event is observed again.
-- Preserve the original provider event timestamp.
+- Support provider timestamp corrections while preserving omitted-versus-explicit-null semantics.
+- Never allow stale observations or replay data to overwrite newer live state.
+
+Resolution execution remains outside CP4. It will use the provisional two-consecutive-complete-collection policy recorded above.
 
 Keep database operations separate from external HTTP integration.
 

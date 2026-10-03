@@ -21,20 +21,22 @@ async function runMigration(
   });
 }
 
-async function getLogisticsTables(client: Client) {
+async function getTables(client: Client) {
   return client.query<{
+    disruptions: string | null;
     suppliers: string | null;
     products: string | null;
     shipments: string | null;
   }>(
     `SELECT
+      to_regclass('public.disruptions') AS disruptions,
       to_regclass('public.suppliers') AS suppliers,
       to_regclass('public.products') AS products,
       to_regclass('public.shipments') AS shipments`,
   );
 }
 
-describe('logistics schema migration', () => {
+describe('disruption schema migration', () => {
   let client: Client;
 
   beforeEach(async () => {
@@ -45,46 +47,39 @@ describe('logistics schema migration', () => {
     await client.end();
   });
 
-  it('creates the logistics tables', async () => {
-    const tables = await getLogisticsTables(client);
+  it('creates the disruption table alongside logistics tables', async () => {
+    const tables = await getTables(client);
 
     expect(tables.rows[0]).toEqual({
+      disruptions: 'disruptions',
       suppliers: 'suppliers',
       products: 'products',
       shipments: 'shipments',
     });
   });
 
-  it('rolls back and reapplies the logistics migration before the test completes', async () => {
+  it('rolls back and reapplies the disruption migration safely', async () => {
     const databaseUrl = getTestDatabaseUrl();
-    let disruptionMigrationRolledBack = false;
-    let logisticsMigrationRolledBack = false;
+    let rolledBack = false;
 
     try {
       await runMigration('down', databaseUrl);
-      disruptionMigrationRolledBack = true;
+      rolledBack = true;
 
-      await runMigration('down', databaseUrl);
-      logisticsMigrationRolledBack = true;
-
-      const tablesAfterRollback = await getLogisticsTables(client);
-      expect(tablesAfterRollback.rows[0]).toEqual({
-        suppliers: null,
-        products: null,
-        shipments: null,
+      expect((await getTables(client)).rows[0]).toEqual({
+        disruptions: null,
+        suppliers: 'suppliers',
+        products: 'products',
+        shipments: 'shipments',
       });
     } finally {
-      if (logisticsMigrationRolledBack) {
-        await runMigration('up', databaseUrl);
-      }
-
-      if (disruptionMigrationRolledBack) {
+      if (rolledBack) {
         await runMigration('up', databaseUrl);
       }
     }
 
-    const tablesAfterReapplication = await getLogisticsTables(client);
-    expect(tablesAfterReapplication.rows[0]).toEqual({
+    expect((await getTables(client)).rows[0]).toEqual({
+      disruptions: 'disruptions',
       suppliers: 'suppliers',
       products: 'products',
       shipments: 'shipments',
