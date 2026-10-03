@@ -25,6 +25,23 @@ The backend executes approved actions.
 
 Database decisions are recorded in [Database architecture](docs/architecture/database.md).
 
+## MVP governance
+
+[MVP scope and decision register](docs/product/mvp-scope.md) is the
+authoritative reference for approved product scope, requirements,
+architecture decisions and known risks.
+
+Before planning or implementing a change, read the MVP document and the
+relevant iteration documentation.
+
+If a proposed change conflicts with the approved MVP, adds material
+complexity or changes an architectural decision:
+
+1. flag the concern;
+2. explain its impact and available alternatives;
+3. obtain explicit user approval before proceeding; and
+4. update the MVP decision register only after approval.
+
 ## Migration
 
 This repository is being migrated from a refund/customer-support
