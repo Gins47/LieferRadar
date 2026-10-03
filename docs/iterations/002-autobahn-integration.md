@@ -1,7 +1,7 @@
 # Iteration 002 — Autobahn Integration & Persistence
 
 **Project:** LieferRadar  
-**Status:** Phase 002A in progress — CP1–CP5 completed; CP6 next, awaiting approval<br>
+**Status:** Phase 002A in progress — CP1–CP6 completed; accelerated Iteration A review pending<br>
 **Dependency:** Iteration 001 — Completed  
 **Database:** PostgreSQL 18 with pgvector, running through Docker Compose
 
@@ -26,7 +26,7 @@ Approved database decisions are recorded in [Database architecture](../architect
 
 # Phase 002A — PostgreSQL Persistence & Retrieval
 
-**Status:** CP1–CP5 completed; CP6 next, awaiting approval
+**Status:** CP1–CP6 completed; accelerated Iteration A review pending
 
 **Goal:** Implement reliable database persistence and disruption retrieval independently of the external Autobahn API.
 
@@ -39,7 +39,7 @@ Approved database decisions are recorded in [Database architecture](../architect
 | CP3 | PostgreSQL logistics repository and asynchronous shipment lookups | Completed | Unchanged shipment HTTP response, 404 and internal relationship-error behavior |
 | CP4 | Disruption table, indexes, inserts, upserts and identity lookups | Completed | Disruption schema, canonical model/hash, persistence behavior and identity lookups |
 | CP5 | A1 fixture-backed queries, Berlin date filtering and pagination | Completed | Authentic fixture retrieval, combined filters, timezone boundaries and stable ordering |
-| CP6 | Disruption retrieval module, DTOs, service and controller | Not started | List/detail HTTP contracts, query validation and shipment regression |
+| CP6 | Disruption retrieval module, DTOs, service and controller | Completed | PostgreSQL list/detail HTTP contracts, query validation and shipment regression |
 | CP7 | Phase 002A acceptance and diff review | Not started | Complete checks and persistence after application restart; review before Phase 002B |
 
 ### CP1 completion record
@@ -146,7 +146,20 @@ CP5 does not add HTTP endpoints, collection, automatic resolution, tracking, mat
 - Compared CP5 with the CP4 baseline: migration, disruption model/hash, database infrastructure, dependencies and authentic payload are unchanged. Repository row mapping and write paths remain intact; existing concurrency, replay/staleness, timestamp merging, explicit-null and lifecycle tests pass.
 - Remaining limits: latest state cannot reconstruct historical warnings; one `queriedRoad` retains only the latest retrieval context; offset pages can shift between separate requests when data changes. These are documented MVP assumptions, not shipment impact evidence. Full lint still needs separate cleanup of its existing finding.
 
-**Next checkpoint:** CP6 requires separate authorization. Stop for review before proceeding; no CP6 implementation or commit was created during CP5.4.
+### Accelerated Iteration A — warning collection and retrieval
+
+**Status:** Implemented and fixture-verified 2026-10-04; final review pending.
+
+- Added PostgreSQL-backed `GET /disruptions` and `GET /disruptions/:id` using the approved query/page contract. List input maps HTTP `road` to the application `queriedRoad` field; invalid query input is rejected at the HTTP boundary.
+- Added a warning-only official Autobahn client with a 5-second request timeout and at most two total attempts for transient failures. It validates the warning envelope, URL-encodes the road component, rejects redirects and does not retry malformed or invalid provider responses.
+- Added a provider-boundary warning normalizer and a collection service that preserves original German descriptions, GeoJSON, raw payload and timestamp-presence semantics before using the CP4 repository upsert. Per-record failures produce a partial result without discarding valid records.
+- Added `POST /integrations/autobahn/collect`. It returns 404 unless `AUTOBANH_COLLECTION_ENABLED=true` in a non-production process; the route is always disabled in production. No scheduler, automatic resolution or closure collection was added.
+- Added the explicit `replay:autobahn:a1:demo` command. It requires `--demo` and `LIEFERRADAR_DEMO_DATABASE_URL` pointing to a separately configured local `lieferradar_demo_*` database, then imports the authentic A1 fixture as `REPLAY` observations. It never falls back to the development database.
+- Actual checks passed: unit tests (14 suites, 53 tests), isolated PostgreSQL tests (6 suites, 37 tests), and real NestJS HTTP tests (1 suite, 9 tests). TypeScript, production build, focused lint and `git diff --check` also passed. The isolated runner removed its temporary PostgreSQL container and network.
+- A read-only live probe of the official A1 warning endpoint completed successfully on 2026-10-04 and returned one record. It did not persist provider data. The development database was not modified during verification.
+- Full non-mutating lint has one pre-existing error: unused `metadata` in `src/common/pipes/zod-body-validation.pipe.ts:11`. No Iteration A file has a lint finding. The replay command was also checked without a demo database URL and failed safely before connecting; replay execution remains pending a separately provisioned demo database.
+
+The approved accelerated sequence is recorded in [Accelerated MVP delivery](../product/accelerated-delivery.md). Iteration B starts only after review; it will add the verified A1 route, simulator, conservative matching and the simple frontend.
 
 ## A1. Database configuration
 

@@ -360,6 +360,17 @@ export class PostgresDisruptionRepository {
     return result.rows[0] ? mapDisruption(result.rows[0]) : undefined;
   }
 
+  async findById(id: string): Promise<Disruption | undefined> {
+    const result = await this.database.query<DisruptionRow>(
+      `SELECT ${SELECT_DISRUPTION_COLUMNS}
+      FROM disruptions
+      WHERE id = $1`,
+      [id],
+    );
+
+    return result.rows[0] ? mapDisruption(result.rows[0]) : undefined;
+  }
+
   async findActiveDisruptions(
     input: Partial<ActiveDisruptionQuery> = {},
   ): Promise<DisruptionPage> {

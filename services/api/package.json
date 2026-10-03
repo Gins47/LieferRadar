@@ -25,7 +25,8 @@
     "migrate:down": "node-pg-migrate down --migrations-dir migrations",
     "migrate:up:local": "node --env-file=.env ./node_modules/node-pg-migrate/bin/node-pg-migrate.js up --migrations-dir migrations",
     "migrate:down:local": "node --env-file=.env ./node_modules/node-pg-migrate/bin/node-pg-migrate.js down --migrations-dir migrations",
-    "seed:logistics:local": "node --env-file=.env --require ts-node/register scripts/seed-logistics-fixtures.ts --development"
+    "seed:logistics:local": "node --env-file=.env --require ts-node/register scripts/seed-logistics-fixtures.ts --development",
+    "replay:autobahn:a1:demo": "node --env-file=.env --require ts-node/register scripts/replay-autobahn-a1-warnings.ts --demo"
   },
   "dependencies": {
     "@nestjs/common": "^11.0.1",

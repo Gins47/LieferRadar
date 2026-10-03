@@ -66,4 +66,15 @@ The first command runs normal integration and HTTP tests. The second verifies cl
 
 CP1 supplies connection configuration, an injectable pool, migration tooling and isolated test orchestration. CP2.1 adds the versioned logistics schema migration. CP3 registers `DatabaseModule` through `LogisticsModule`, binds the repository token to PostgreSQL and makes shipment services asynchronous. The in-memory repository remains on disk but is no longer registered in the application.
 
-CP2.2 provides explicit logistics fixture seeding through a development-only command. It inserts both fixture groups in one transaction, verifies values after conflict-safe inserts and rolls back conflicting runs. Migrations and seeding are never executed at startup. Local development loads `.env`; production uses external configuration. Test mode requires the isolated runner context. Startup verifies connectivity with a five-second connection timeout, and Nest shutdown hooks close the pool. Phase 002A remains storage and fixture-based retrieval; provider normalization, live collection and general replay are Phase 002B. Python migrations remain independent, and this decision adds no PostGIS, scheduler, tracking, AI or frontend work.
+CP2.2 provides explicit logistics fixture seeding through a development-only command. It inserts both fixture groups in one transaction, verifies values after conflict-safe inserts and rolls back conflicting runs. Migrations and seeding are never executed at startup. Local development loads `.env`; production uses external configuration. Test mode requires the isolated runner context. Startup verifies connectivity with a five-second connection timeout, and Nest shutdown hooks close the pool.
+
+Accelerated Iteration A adds warning-only Autobahn collection without changing
+persistence semantics: the integration validates and normalizes provider
+records before using the existing repository upsert. `GET /disruptions` and
+`GET /disruptions/:id` read only from PostgreSQL. The local-demo collection
+route is disabled unless explicitly enabled and is always unavailable in
+production. The warning fixture replay command requires a separate local
+`lieferradar_demo_*` database, so it cannot use the development database.
+Collection does not schedule background work or infer resolution; closure
+support remains deferred. Python migrations remain independent, and this
+decision adds no PostGIS, tracking, AI or frontend work.

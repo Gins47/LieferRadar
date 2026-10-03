@@ -1,12 +1,20 @@
 import { Module } from '@nestjs/common';
 import { AppController } from './app.controller';
 import { AppService } from './app.service';
+import { DisruptionModule } from './disruption/disruption.module';
+import { AutobahnModule } from './integrations/autobahn/autobahn.module';
 import { ProductModule } from './product/product.module';
 import { ShipmentModule } from './shipment/shipment.module';
 import { SupplierModule } from './supplier/supplier.module';
 
 @Module({
-  imports: [SupplierModule, ProductModule, ShipmentModule],
+  imports: [
+    SupplierModule,
+    ProductModule,
+    ShipmentModule,
+    DisruptionModule,
+    AutobahnModule,
+  ],
   controllers: [AppController],
   providers: [AppService],
 })

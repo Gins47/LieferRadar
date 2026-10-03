@@ -93,7 +93,7 @@ Build a demonstrable **AI-assisted logistics disruption copilot**. The system in
 
 **Persistence:** PostgreSQL with `pg`, `node-pg-migrate` and SQL repositories for NestJS. Explicit migrations and seeds; no automatic schema changes or seeding on application startup. Python migrations remain separate.
 
-## 5. Current status (reported 2026-10-03)
+## 5. Current status (reported 2026-10-04)
 
 | Work | Status | Evidence / remaining work |
 |---|---|---|
@@ -102,28 +102,29 @@ Build a demonstrable **AI-assisted logistics disruption copilot**. The system in
 | CP2 logistics persistence | Complete | Schema and idempotent transactional fixtures |
 | CP3 PostgreSQL-backed shipment API | Complete | Shipment HTTP regressions |
 | CP4 disruption persistence | Complete | CP5.4 confirmed persistence/hash/write paths unchanged; concurrency, replay, timestamp merging and lifecycle regressions pass |
-| CP5 disruption filtering | Complete; final review changes uncommitted | CP5.4: 37 unit, 37 isolated PostgreSQL and 4 shipment HTTP tests passed; Berlin/DST boundaries, pagination and authentic warning preservation verified; see [Iteration 002](../iterations/002-autobahn-integration.md#cp5-implementation-and-verification) |
-| CP6 disruption REST endpoints | Not started | Expose stored warnings |
-| Official live Autobahn collection | Not started | Includes completeness-aware lifecycle handling |
+| CP5 disruption filtering | Complete | CP5.4: Berlin/DST boundaries, pagination and authentic warning preservation verified; see [Iteration 002](../iterations/002-autobahn-integration.md#cp5-implementation-and-verification) |
+| CP6 disruption REST endpoints | Complete; Iteration A review pending | PostgreSQL-backed list/detail endpoints preserve warning evidence and validate query input |
+| Official live Autobahn warnings | Implemented; live persistence smoke check pending | Warning-only manual collection, normalization, safe upsert and controlled replay; closures remain deferred |
 | Verified A1 route fixture + simulator | Agreed approach; not implemented | Route acquisition/verification and vehicle module |
 | Deterministic candidate matching | Not started | Must avoid motorway-only conclusions |
 | Python disruption assessment | Not started | Existing Python service foundation to be reviewed |
 | Operator demonstration | Not started | Map, evidence and approval flow |
 
-**Maintenance:** CP5.4 full lint confirms one pre-existing unused `metadata` finding; no CP5 lint regressions remain. TypeScript and production build passed. Verify current repository status before marking subsequent work complete.
+**Maintenance:** Iteration A passed 53 unit, 37 isolated PostgreSQL and 9 HTTP tests, plus TypeScript and production build. Full lint still reports one pre-existing unused `metadata` finding. A replay run awaits a separately provisioned demo database. Verify current repository status before marking subsequent work complete.
 
-## 6. Proposed delivery order
+## 6. Accelerated delivery sequence
 
-1. **Close CP4:** commit verified CP4.3/CP4.4 work; handle unrelated lint cleanup separately.
-2. **CP5–CP7:** implement disruption filtering, REST endpoints and Phase 002A acceptance.
-3. **Official collection:** implement selective Autobahn fetching, normalization, idempotent persistence, complete-collection accounting and explicit lifecycle handling; provide a controlled manual trigger before scheduling.
-4. **Route fixture and simulator:** obtain and verify the real A1 route geometry; build minimal NestJS playback and latest-position persistence.
-5. **Candidate matching:** integrate warning evidence, planned/remaining route and mock position; establish conservative direction/time rules.
-6. **Python AI workflow:** agree request/response schema, implement evidence-grounded analysis and evaluate ambiguous scenarios. API contract planning can run earlier in parallel without expanding implementation scope.
-7. **Operator demo:** display warning/vehicle/candidate assessment and simulate explicit approval.
-8. **End-to-end verification:** repeatable A1 scenario, negative controls (opposite direction, out-of-area, stale warning), failure handling and documentation.
+The approved three-day sequence is recorded in
+[Accelerated MVP delivery](accelerated-delivery.md). It retains the existing
+checkpoint evidence and organizes remaining work into three reviewable outcomes:
 
-These are delivery stages, not promises of exact dates or a new checkpoint numbering scheme. Align stage labels with the existing iteration document before implementation.
+1. **Iteration A:** warning collection, controlled replay and disruption HTTP retrieval.
+2. **Iteration B:** one verified A1 route fixture, deterministic simulator, conservative candidate matching and a simple Next.js visualization.
+3. **Iteration C:** one structured Python assessment workflow and a simulated human approval/rejection record.
+
+Each outcome ends with verification, diff review and explicit authorization
+before a commit or the next outcome. Automatic resolution, background
+synchronization, dynamic routing and public mutation access remain deferred.
 
 ## 7. Decision register
 
@@ -140,6 +141,10 @@ These are delivery stages, not promises of exact dates or a new checkpoint numbe
 | D09 | Human approval before operational actions | Keeps operator in control | Approved |
 | D10 | No dynamic routing or real GPS integration in MVP | Keeps scope achievable | Approved |
 | D11 | UTC for stored timestamps and internal service communication; Europe/Berlin calendar boundaries converted independently inside PostgreSQL, with no new timezone dependency | Correct DST boundaries and comparisons against indexed TIMESTAMPTZ columns; clarifies §2C and CP5 without changing CP4 persistence semantics | Approved 2026-10-03; implemented and verified in CP5 |
+| D12 | Use three outcome-based iterations for the interview-ready MVP | Protects the verified persistence foundation while focusing delivery on a repeatable demonstration | Approved 2026-10-04 |
+| D13 | Iteration A collects official warnings first; closure collection is deferred unless separately approved | Prioritizes the primary A1 demonstration without delaying safe warning ingestion | Approved 2026-10-04 |
+| D14 | Mutation endpoints are disabled by default, local-demo-only, and unavailable in production | Avoids public state-changing operations before an authentication design is approved | Approved 2026-10-04 |
+| D15 | Use a separate local demo database and historical simulation clock for recorded A1 evidence | Prevents replay from altering development data or being presented as live information | Approved 2026-10-04 |
 
 ## 8. Open concerns and validation gates
 
@@ -154,6 +159,7 @@ These are delivery stages, not promises of exact dates or a new checkpoint numbe
 | R07 | Simulator interpolation may not represent real travel time or traffic | False precision | Label simulation, use deterministic timestamps and do not claim real ETA |
 | R08 | AI may overstate evidence | Unsafe operator recommendations | Strict structured output, evidence attribution, evaluation and mandatory human approval |
 | R09 | Scope expansion could delay a usable demonstration | Incomplete MVP | Use change-control procedure below |
+| R10 | A local mutation endpoint could be enabled in the wrong environment | Unapproved external data collection | Require explicit configuration, return 404 by default and disable in production |
 
 ## 9. Change-control procedure (mandatory)
 
@@ -177,6 +183,7 @@ For every proposed material change:
 |---|---|---|---|
 | 2026-10-03 | 1.0 | Initial consolidated MVP scope and decision register | Approved |
 | 2026-10-03 | 1.0 | Recorded D11: CP5 timezone implementation clarification for §2C; database and iteration documentation aligned | Explicit user approval |
+| 2026-10-04 | 1.1 | Approved accelerated A/B/C sequence and D12–D15 | Explicit user approval |
 
 ## 10. Definition of MVP done
 

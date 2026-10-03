@@ -46,6 +46,25 @@ The development-only seed command inserts both shipment fixtures. Startup does
 not execute migrations or seed data. Local startup loads `.env` when present;
 exported shell variables take precedence.
 
+### Autobahn warning collection and replay
+
+`GET /disruptions` and `GET /disruptions/:id` read stored disruption state.
+The manual warning collection route is disabled by default. For a local
+demonstration only, set `AUTOBANH_COLLECTION_ENABLED=true` before starting the
+API, then call `POST /integrations/autobahn/collect` with an optional
+`{ "road": "A1" }` body. It remains unavailable when `NODE_ENV=production`.
+
+To replay the recorded A1 warning fixture, configure
+`LIEFERRADAR_DEMO_DATABASE_URL` with a local PostgreSQL database whose name
+starts with `lieferradar_demo_`, apply the existing migrations to that database,
+then run:
+
+```bash
+npm run replay:autobahn:a1:demo
+```
+
+The replay command rejects the development database and never runs at startup.
+
 ```bash
 # development
 $ npm run start
