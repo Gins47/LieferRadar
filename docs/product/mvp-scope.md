@@ -1,7 +1,7 @@
 # LieferRadar — MVP Scope and Decision Register
 
 **Status:** Approved MVP baseline  
-**Version:** 1.6 · 2026-10-04<br>
+**Version:** 1.7 · 2026-10-04<br>
 **Approval date:** 2026-10-03  
 **Repository location:** `docs/product/mvp-scope.md`  
 **Purpose:** Single source of truth for MVP product scope, agreed architectural decisions, delivery sequence, open concerns and controlled changes.
@@ -153,7 +153,7 @@ synchronization, dynamic routing and public mutation access remain deferred.
 | D15 | Use a separate local demo database and historical simulation clock for recorded A1 evidence | Prevents replay from altering development data or being presented as live information | Approved 2026-10-04 |
 | D16 | Combine essential B/C work into six-hour Iteration 003, checkpoints B1–B6; prioritize one real AI assessment | Produces a complete evidence-to-reasoning flow within the available budget | Approved 2026-10-04; B1–B2 complete, B3–B6 pending |
 | D17 | Use the supplied passenger-car ORS route as immutable file-backed demo geometry; no route table or runtime routing | Reuses available geometry while disclosing subsequent capture and unverified HGV suitability | Approved 2026-10-04 for simulation; B1 verification complete |
-| D18 | Persist one fictional vehicle/driver state with deterministic historical playback and atomic revision checks | Supports restartable controls without driver management or position history | Approved 2026-10-04; implementation pending |
+| D18 | Persist one fictional vehicle/driver state keyed by vehicle, with current shipment assignments, deterministic historical playback and atomic revision checks | Supports one vehicle carrying several shipments without fleet management or position/assignment history | Approved 2026-10-04; B3.1 persistence verified, playback/API work pending |
 | D19 | Allow optional Next.js/React Leaflet/OSM prototype, 45-minute target and 60-minute maximum, with HTTP/JSON fallback | Limits frontend effort and protects AI delivery; revises earlier map-SDK deferral | Approved 2026-10-04; implementation pending |
 | D20 | Reuse Python FastAPI and installed LLM tooling for one bounded versioned structured assessment; RAG is optional | Keeps facts in NestJS and reasoning in Python without unrelated ingestion work | Approved 2026-10-04; B2 mocked Python reasoning complete; B4 integration and live gate pending |
 | D21 | Defer authentication infrastructure and approval/rejection recording from Iteration 003; retain local guards and human authority | No consequential actions are executed; public exposure and full MVP completion retain their separate gates | Approved 2026-10-04; full MVP operator-decision requirement preserved |
@@ -209,6 +209,7 @@ For every proposed material change:
 | 2026-10-04 | 1.4 | Recorded D23: compact AI reasoning contract and NestJS-owned current-state verification | Explicit user approval; B2 revised and verified |
 | 2026-10-04 | 1.5 | Recorded D24: NestJS candidate selection, Python rejection of definite exclusions, and German candidate explanations | Explicit user approval; B2 revision |
 | 2026-10-04 | 1.6 | Revised D24: English candidate explanations | Explicit user approval |
+| 2026-10-04 | 1.7 | Revised D18: vehicle state is keyed by vehicle and linked through a current shipment-assignment table | Explicit user approval |
 
 ## 10. Definition of MVP done
 

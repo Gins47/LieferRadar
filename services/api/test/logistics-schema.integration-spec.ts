@@ -57,10 +57,14 @@ describe('logistics schema migration', () => {
 
   it('rolls back and reapplies the logistics migration before the test completes', async () => {
     const databaseUrl = getTestDatabaseUrl();
+    let demoVehicleMigrationRolledBack = false;
     let disruptionMigrationRolledBack = false;
     let logisticsMigrationRolledBack = false;
 
     try {
+      await runMigration('down', databaseUrl);
+      demoVehicleMigrationRolledBack = true;
+
       await runMigration('down', databaseUrl);
       disruptionMigrationRolledBack = true;
 
@@ -79,6 +83,10 @@ describe('logistics schema migration', () => {
       }
 
       if (disruptionMigrationRolledBack) {
+        await runMigration('up', databaseUrl);
+      }
+
+      if (demoVehicleMigrationRolledBack) {
         await runMigration('up', databaseUrl);
       }
     }

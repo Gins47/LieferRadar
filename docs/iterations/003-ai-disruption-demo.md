@@ -1,7 +1,7 @@
 # Iteration 003 — AI Disruption Demonstration
 
 **Project:** LieferRadar<br>
-**Status:** B1 complete; B2 response-quality refinement needs correction; B3–B6 not started<br>
+**Status:** B1–B2 accepted; B3.1–B3.2 complete; B3.3–B6 not started<br>
 **Approval date:** 2026-10-04<br>
 **Dependencies:** Iterations 001 and 002; existing NestJS and Python services<br>
 **Budget:** Six development hours, including verification
@@ -47,13 +47,12 @@ NestJS remains the source of supply-chain facts and deterministic checks. Python
 
 Load the approved route file as an immutable local artifact, validate it and bind the simulation to its SHA-256 hash. No route table or route management is required. Local build/start instructions must specify access to the route file; it is currently outside NestJS build output.
 
-Add one explicit migration for `demo_vehicle_state`:
+Add one explicit migration for `demo_vehicle_state` and `demo_vehicle_shipments`. Vehicle state is keyed by `vehicle_id`; the assignment table has `shipment_id` as its primary key and refers to the vehicle. This permits one fictional vehicle to carry several shipments while each shipment has at most one current assignment. It does not retain assignment history.
 
 | Field | Purpose |
 | ----- | ------- |
-| `shipment_id` | Primary key and foreign key to the existing shipment |
-| `vehicle_id` | Fictional vehicle identifier |
-| `driver` | Fictional name/contact JSONB metadata, not a separate driver feature |
+| `vehicle_id` | Primary key for the fictional vehicle's latest state |
+| `driver` | Fictional name, email and phone JSONB metadata, not a separate driver feature |
 | `route_hash` | Identity of the route artifact used by the simulation |
 | `elapsed_seconds` | Nonnegative simulated progress through the journey |
 | `position` | Latest validated longitude/latitude JSONB |
@@ -61,7 +60,7 @@ Add one explicit migration for `demo_vehicle_state`:
 | `revision` | Nonnegative revision for atomic updates and duplicate/stale request protection |
 | `updated_at` | Real persistence timestamp, stored as `TIMESTAMPTZ` |
 
-Use practical checks, foreign keys and repository transactions. Persist only latest state. Example identifiers are `VEH-DEMO-002`, `Alex Demo` and `driver-shp002@example.invalid`; no real contact information or phone number is necessary. Exclude contact metadata from LLM inputs.
+Use practical checks, foreign keys and repository transactions. Persist only latest state. Example identifiers are `VEH-DEMO-002`, `Alex Demo`, `driver-shp002@example.invalid` and a fictional phone number; do not use real contact information. Exclude contact metadata from LLM inputs.
 
 An explicit demo preparation command reuses logistics fixture seeding and recorded-warning replay with the existing local `lieferradar_demo_*` database guard. Do not weaken development seed restrictions. Migrations and setup remain explicit; startup performs neither. Automated database tests use the isolated runner and cannot fall back to development.
 
@@ -235,7 +234,14 @@ Use mocked calls for automated tests; verify FastAPI request/response behavior u
 
 ### B3 — Vehicle persistence and simulator
 
-**Tasks:** Add one `node-pg-migrate` migration and concrete repository; explicit demo preparation; static route loader; reset/advance/read APIs with validation and atomic revision protection. Persist fictional state; reject route-hash mismatches. Demo preparation must query the exact selected warning after replay and require `source: autobahn`, provider ID `INRIX--vi-avl.2026-10-03_06-53-00-000_003.de0` and `ingestionMode: REPLAY`; fail rather than use newer LIVE state. Bind local processes to loopback and guard demonstration mutations. Adapt existing rollback tests, which currently assume exactly two migrations, and restore schema in `finally`.
+**Approved implementation sequence:**
+
+1. **B3.1 — persistence foundation:** Add `demo_vehicle_state` keyed by vehicle and `demo_vehicle_shipments` for current assignments, a minimal typed PostgreSQL repository and focused isolated migration/repository tests. One vehicle can carry multiple shipments; one shipment has at most one assignment. Adapt earlier migration rollback tests so each restores the schema in `finally`.
+2. **B3.2 — deterministic route playback:** Load and validate the immutable route artifact, calculate a fictional uniform position from elapsed simulated seconds, and retain its SHA-256. The progress model is demonstration data only and must never be described as recorded vehicle movement.
+3. **B3.3 — explicit preparation:** Seed the fictional `SHP-002` vehicle only through a guarded demo-preparation flow. It must load the exact historical `REPLAY` warning with `source: autobahn` and provider ID `INRIX--vi-avl.2026-10-03_06-53-00-000_003.de0`; absence or newer LIVE state is an explicit failure, never a substitution.
+4. **B3.4 — local demonstration API:** Add stored-state, reset and advance operations for SHP-002 only. The GET response contains stored state, route geometry and the selected historical warning; disruption relevance calculations remain B4. Unprepared state returns `409`.
+
+**Tasks:** Persist one fictional vehicle/driver state; reject route-hash mismatches; add reset/advance/read validation and atomic revision protection. Maximum advance is 7,200 whole seconds. Advance at the destination validates `expectedRevision` and then performs a no-op. Bind local processes to loopback and guard demonstration mutations. Demo preparation must query the exact selected warning after replay and require `source: autobahn`, provider ID `INRIX--vi-avl.2026-10-03_06-53-00-000_003.de0` and `ingestionMode: REPLAY`; fail rather than use newer LIVE state.
 
 **Acceptance:** Same reset/advance sequence reproduces positions and timestamps after restart. Progress is bounded, duplicate/stale advancement cannot apply twice, and SHP-001/SHP-002 contracts and shipment status remain unchanged. Explicit setup can target only the eligible demo database. Isolated tests prove persistence and cleanup.
 
@@ -316,8 +322,10 @@ From the repository root, run `git diff --check` and review `git diff` plus new 
 Update this checklist and table after each checkpoint. Record date, commands, exit/results, manual/live evidence, actual time, blockers and remaining issues. A started checkpoint is not complete because its time budget expired.
 
 - [x] B1 — Route/provenance accepted.
-- [ ] B2 — Response-quality refinement needs live-evaluation correction.
-- [ ] B3 — Latest vehicle persistence and deterministic APIs verified.
+- [x] B2 — Structured candidate explanation accepted; two non-blocking follow-ups recorded.
+- [x] B3.1 — Revised vehicle-state migration and repository verified.
+- [x] B3.2 — Deterministic route loading and fictional position calculation verified.
+- [ ] B3.3–B3.4 — Guarded preparation and local APIs verified.
 - [ ] B4 — Real backend assessment and evaluation verified.
 - [ ] B5 — Frontend delivered or time-limit fallback explicitly recorded.
 - [ ] B6 — Final acceptance and diff review completed.
@@ -325,8 +333,10 @@ Update this checklist and table after each checkpoint. Record date, commands, ex
 | Checkpoint | Status | Verification results | Outstanding issues |
 | ---------- | ------ | -------------------- | ------------------ |
 | B1 | Complete — 2026-10-04 | `node services/api/scripts/verify-luebeck-hamburg-a1-route.js`, SHA-256, route-shape verification and `git diff --check` passed. See [route verification evidence](../research/luebeck-hamburg-a1-route-verification.md). | Passenger-car geometry and subsequent capture do not establish HGV suitability, affected carriageway or historical impact. B3 must prove exact REPLAY warning selection. |
-| B2 | Needs correction — 2026-10-04 | The response-quality prompt updates passed 16 mocked schema, reasoning and route tests; FastAPI OpenAPI and Python compilation checks passed with a temporary valid `DEBUG=false` environment. The bounded SHP-002 live call was rejected by stable limitation-coverage validation, so no assessment was returned. | The model did not reliably cite every supplied limitation in `supportingEvidence.factIds`, despite the prompt instruction. Keep validation; decide whether to use deterministic limitation-response construction or a contract revision before accepting the refinement. NestJS current-state verification remains B4. Local `.env` currently has invalid `DEBUG=release`, so unmodified import fails before startup. |
-| B3 | Not started | No checkpoint tests run | Migration, demo preparation, route loading and persistence |
+| B2 | Accepted — 2026-10-04 | Mocked reasoning, route and schema checks passed; FastAPI OpenAPI and compilation checks passed. The live SHP-002 evaluation correctly preserved provider-delay, timing, replay, route and simulated-vehicle uncertainty. | Two non-blocking follow-ups are recorded below. NestJS current-state verification remains B4. |
+| B3.1 | Complete — 2026-10-04 | Vehicle state is keyed by vehicle and `demo_vehicle_shipments` records current shipment assignments. Isolated migration/repository tests cover table rollback/reapplication, state mapping, multi-shipment assignment and one-current-assignment enforcement. `npm --prefix services/api run test:integration` passed: 8 database suites / 43 tests and 1 HTTP suite / 9 tests; the container/network were removed. API unit tests (14 suites / 53 tests), TypeScript, focused lint, build and `git diff --check` passed. | Playback, preparation and HTTP operations remain later B3 work. |
+| B3.2 | Complete — 2026-10-04 | The injectable route service validates the immutable GeoJSON hash, LineString, WGS84 coordinates and provenance. Unit tests cover boundaries, Haversine distance progression, repeated coordinates, invalid elapsed seconds, deterministic results, invalid geometry and hash mismatch. Focused route tests passed (10 tests); API unit tests passed (15 suites / 63 tests); TypeScript, focused lint and build passed. | Geometry is later-captured passenger-car demonstration data, not historical vehicle tracking or HGV route evidence. |
+| B3.3–B3.4 | Not started | No checkpoint tests run | Guarded preparation and local APIs |
 | B4 | Not started | No real LLM assessment or evaluation run | Key/quota/model access and end-to-end integration |
 | B5 | Not started; optional | No frontend checks run | 45-minute target / 60-minute maximum; retain fallback |
 | B6 | Not started | No final acceptance checks run | Await required checkpoints; document incomplete work honestly |
@@ -335,4 +345,9 @@ Update this checklist and table after each checkpoint. Record date, commands, ex
 
 **B2 live evaluation — 2026-10-04:** The initial live call omitted the later-captured passenger-car route limitation and was rejected by stable-ID coverage validation. A subsequent correction adds an explicit per-request list of required check and limitation IDs; every supplied limitation must be cited in `supportingEvidence`, while `missingEvidence` remains for information absent from the request. The earlier repeated call returned German output with all four checks and all four limitation IDs, described `POSSIBLE` as possible overlap, identified the route as later captured with a passenger-car profile, and preserved historical replay and simulated-vehicle uncertainty. It did not present the provider-reported 18 minutes as a confirmed or minimum shipment delay.
 
-**B2 response-quality recheck — 2026-10-04:** The approved operator-message, no-technical-ID and missing-evidence prompt improvements passed mocked tests. The live SHP-002 call with explicit missing-end-time, simulated-vehicle and passenger-car-route limitations was rejected because the model omitted one or more required limitation IDs from `supportingEvidence.factIds`; no API response was returned. The guard prevented an incomplete response from reaching an operator. A reliable correction needs explicit approval: either construct limitation acknowledgement entries deterministically from trusted NestJS limitations, or extend the contract with structured limitation acknowledgements. B2 and B3 remain unaccepted pending that choice.
+**B2 non-blocking follow-ups — 2026-10-04:**
+
+1. Exclude the application-owned `assessmentId` from the LLM prompt while continuing to attach the trusted ID after output validation.
+2. Add deterministic response validation requiring the LLM to cite all four supplied check IDs, alongside the existing limitation-coverage validation.
+
+These follow-ups do not block B3. They do not change the current external API contract.

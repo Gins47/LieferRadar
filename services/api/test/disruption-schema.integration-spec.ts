@@ -60,11 +60,15 @@ describe('disruption schema migration', () => {
 
   it('rolls back and reapplies the disruption migration safely', async () => {
     const databaseUrl = getTestDatabaseUrl();
-    let rolledBack = false;
+    let demoVehicleMigrationRolledBack = false;
+    let disruptionMigrationRolledBack = false;
 
     try {
       await runMigration('down', databaseUrl);
-      rolledBack = true;
+      demoVehicleMigrationRolledBack = true;
+
+      await runMigration('down', databaseUrl);
+      disruptionMigrationRolledBack = true;
 
       expect((await getTables(client)).rows[0]).toEqual({
         disruptions: null,
@@ -73,7 +77,11 @@ describe('disruption schema migration', () => {
         shipments: 'shipments',
       });
     } finally {
-      if (rolledBack) {
+      if (disruptionMigrationRolledBack) {
+        await runMigration('up', databaseUrl);
+      }
+
+      if (demoVehicleMigrationRolledBack) {
         await runMigration('up', databaseUrl);
       }
     }
