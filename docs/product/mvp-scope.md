@@ -1,7 +1,7 @@
 # LieferRadar — MVP Scope and Decision Register
 
 **Status:** Approved MVP baseline  
-**Version:** 1.2 · 2026-10-04<br>
+**Version:** 1.3 · 2026-10-04<br>
 **Approval date:** 2026-10-03  
 **Repository location:** `docs/product/mvp-scope.md`  
 **Purpose:** Single source of truth for MVP product scope, agreed architectural decisions, delivery sequence, open concerns and controlled changes.
@@ -151,12 +151,13 @@ synchronization, dynamic routing and public mutation access remain deferred.
 | D13 | Iteration A collects official warnings first; closure collection is deferred unless separately approved | Prioritizes the primary A1 demonstration without delaying safe warning ingestion | Approved 2026-10-04 |
 | D14 | Mutation endpoints are disabled by default, local-demo-only, and unavailable in production | Avoids public state-changing operations before an authentication design is approved | Approved 2026-10-04 |
 | D15 | Use a separate local demo database and historical simulation clock for recorded A1 evidence | Prevents replay from altering development data or being presented as live information | Approved 2026-10-04 |
-| D16 | Combine essential B/C work into six-hour Iteration 003, checkpoints B1–B6; prioritize one real AI assessment | Produces a complete evidence-to-reasoning flow within the available budget | Approved 2026-10-04; implementation not started |
-| D17 | Use the supplied passenger-car ORS route as immutable file-backed demo geometry; no route table or runtime routing | Reuses available geometry while disclosing subsequent capture and unverified HGV suitability | Approved 2026-10-04 for simulation; final B1 verification pending |
+| D16 | Combine essential B/C work into six-hour Iteration 003, checkpoints B1–B6; prioritize one real AI assessment | Produces a complete evidence-to-reasoning flow within the available budget | Approved 2026-10-04; B1 complete, B2–B6 pending |
+| D17 | Use the supplied passenger-car ORS route as immutable file-backed demo geometry; no route table or runtime routing | Reuses available geometry while disclosing subsequent capture and unverified HGV suitability | Approved 2026-10-04 for simulation; B1 verification complete |
 | D18 | Persist one fictional vehicle/driver state with deterministic historical playback and atomic revision checks | Supports restartable controls without driver management or position history | Approved 2026-10-04; implementation pending |
 | D19 | Allow optional Next.js/React Leaflet/OSM prototype, 45-minute target and 60-minute maximum, with HTTP/JSON fallback | Limits frontend effort and protects AI delivery; revises earlier map-SDK deferral | Approved 2026-10-04; implementation pending |
 | D20 | Reuse Python FastAPI and installed LLM tooling for one bounded versioned structured assessment; RAG is optional | Keeps facts in NestJS and reasoning in Python without unrelated ingestion work | Approved 2026-10-04; implementation pending |
 | D21 | Defer authentication infrastructure and approval/rejection recording from Iteration 003; retain local guards and human authority | No consequential actions are executed; public exposure and full MVP completion retain their separate gates | Approved 2026-10-04; full MVP operator-decision requirement preserved |
+| D22 | Demo preparation verifies the exact historical replay warning; deterministic exclusions bypass AI; assessments bind vehicle revision and warning content hash | Prevents newer LIVE state being presented as historical evidence, avoids unnecessary AI calls for known exclusions and prevents stale assessments | Approved 2026-10-04; B1 documentation complete, B3/B4 implementation pending |
 
 ## 8. Open concerns and validation gates
 
@@ -175,6 +176,8 @@ synchronization, dynamic routing and public mutation access remain deferred.
 | R11 | Supplied route uses `driving-car` and was captured after the warning | Cannot establish HGV legality or historical routing | Label passenger-car geometry and synthetic playback; B1 verifies corridor only |
 | R12 | Configured LLM credentials do not prove quota/model access | Real AI demonstration may be blocked despite passing mock tests | Verify one bounded real call in B4; report failure without fabricated assessment |
 | R13 | Optional OSM tiles or frontend work may fail or overrun | Visualization may consume the reasoning budget | Preserve attribution, enforce 60-minute limit and retain assessment/HTTP fallback |
+| R14 | Existing LIVE state can block replay of the selected historical warning | The demo could otherwise show different evidence without disclosure | B3 must require the exact source, provider ID and `REPLAY` provenance; fail setup if unavailable |
+| R15 | Vehicle movement or warning content can change while AI reasoning is in progress | An assessment can be displayed against stale facts | Bind assessment context to vehicle revision and warning content hash; require fresh reasoning on mismatch |
 
 ## 9. Change-control procedure (mandatory)
 
@@ -200,6 +203,7 @@ For every proposed material change:
 | 2026-10-03 | 1.0 | Recorded D11: CP5 timezone implementation clarification for §2C; database and iteration documentation aligned | Explicit user approval |
 | 2026-10-04 | 1.1 | Approved accelerated A/B/C sequence and D12–D15 | Explicit user approval |
 | 2026-10-04 | 1.2 | Approved six-hour Iteration 003 and D16–D21; supplied car-route limitation, latest vehicle state, optional Leaflet map and deferred operator recording documented | Explicit user approval; documentation only |
+| 2026-10-04 | 1.3 | Recorded D22 and B1 route-verification evidence: exact replay selection, deterministic AI bypass and assessment context consistency | Explicit user approval; B1 complete |
 
 ## 10. Definition of MVP done
 

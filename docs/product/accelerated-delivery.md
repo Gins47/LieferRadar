@@ -73,9 +73,9 @@ stale-context/duplicate-decision tests and a repeatable end-to-end scenario.
 
 ## Iteration 003 — six-hour AI disruption demonstration
 
-**Status:** Approved plan; application implementation not started<br>
+**Status:** B1 complete; B2–B6 not started<br>
 **Specification:** [AI disruption demonstration](../iterations/003-ai-disruption-demo.md)<br>
-**Decisions:** D16–D21 in the MVP register
+**Decisions:** D16–D22 in the MVP register
 
 Deliver one SHP-002 flow using the supplied static ORS passenger-car route,
 persisted fictional vehicle state, authentic historical A1 warning, NestJS
@@ -110,6 +110,13 @@ approval/rejection recording are deferred; no operational action is executed.
 Full MVP completion still requires the operator-decision workflow. No dashboard,
 runtime routing, automatic actions, scheduler, position history or assessment
 cache is added by this iteration.
+
+Demo preparation must verify the selected historical warning by exact source and
+provider ID with `REPLAY` provenance; it fails if newer LIVE state prevents that
+record from being available and never substitutes a different warning. Known
+deterministic exclusions bypass the LLM and are labelled as such. Every AI
+assessment is tied to the vehicle revision and warning content hash used to
+prepare its evidence, so changed state requires a fresh assessment.
 
 ## Demonstration provenance
 
