@@ -1,7 +1,7 @@
 # LieferRadar — MVP Scope and Decision Register
 
 **Status:** Approved MVP baseline  
-**Version:** 1.3 · 2026-10-04<br>
+**Version:** 1.6 · 2026-10-04<br>
 **Approval date:** 2026-10-03  
 **Repository location:** `docs/product/mvp-scope.md`  
 **Purpose:** Single source of truth for MVP product scope, agreed architectural decisions, delivery sequence, open concerns and controlled changes.
@@ -151,13 +151,15 @@ synchronization, dynamic routing and public mutation access remain deferred.
 | D13 | Iteration A collects official warnings first; closure collection is deferred unless separately approved | Prioritizes the primary A1 demonstration without delaying safe warning ingestion | Approved 2026-10-04 |
 | D14 | Mutation endpoints are disabled by default, local-demo-only, and unavailable in production | Avoids public state-changing operations before an authentication design is approved | Approved 2026-10-04 |
 | D15 | Use a separate local demo database and historical simulation clock for recorded A1 evidence | Prevents replay from altering development data or being presented as live information | Approved 2026-10-04 |
-| D16 | Combine essential B/C work into six-hour Iteration 003, checkpoints B1–B6; prioritize one real AI assessment | Produces a complete evidence-to-reasoning flow within the available budget | Approved 2026-10-04; B1 complete, B2–B6 pending |
+| D16 | Combine essential B/C work into six-hour Iteration 003, checkpoints B1–B6; prioritize one real AI assessment | Produces a complete evidence-to-reasoning flow within the available budget | Approved 2026-10-04; B1–B2 complete, B3–B6 pending |
 | D17 | Use the supplied passenger-car ORS route as immutable file-backed demo geometry; no route table or runtime routing | Reuses available geometry while disclosing subsequent capture and unverified HGV suitability | Approved 2026-10-04 for simulation; B1 verification complete |
 | D18 | Persist one fictional vehicle/driver state with deterministic historical playback and atomic revision checks | Supports restartable controls without driver management or position history | Approved 2026-10-04; implementation pending |
 | D19 | Allow optional Next.js/React Leaflet/OSM prototype, 45-minute target and 60-minute maximum, with HTTP/JSON fallback | Limits frontend effort and protects AI delivery; revises earlier map-SDK deferral | Approved 2026-10-04; implementation pending |
-| D20 | Reuse Python FastAPI and installed LLM tooling for one bounded versioned structured assessment; RAG is optional | Keeps facts in NestJS and reasoning in Python without unrelated ingestion work | Approved 2026-10-04; implementation pending |
+| D20 | Reuse Python FastAPI and installed LLM tooling for one bounded versioned structured assessment; RAG is optional | Keeps facts in NestJS and reasoning in Python without unrelated ingestion work | Approved 2026-10-04; B2 mocked Python reasoning complete; B4 integration and live gate pending |
 | D21 | Defer authentication infrastructure and approval/rejection recording from Iteration 003; retain local guards and human authority | No consequential actions are executed; public exposure and full MVP completion retain their separate gates | Approved 2026-10-04; full MVP operator-decision requirement preserved |
-| D22 | Demo preparation verifies the exact historical replay warning; deterministic exclusions bypass AI; assessments bind vehicle revision and warning content hash | Prevents newer LIVE state being presented as historical evidence, avoids unnecessary AI calls for known exclusions and prevents stale assessments | Approved 2026-10-04; B1 documentation complete, B3/B4 implementation pending |
+| D22 | Demo preparation verifies the exact historical replay warning; NestJS excludes definite non-candidates before AI; assessments bind vehicle revision and warning content hash | Prevents newer LIVE state being presented as historical evidence, avoids unnecessary AI calls for known exclusions and prevents stale assessments | Approved 2026-10-04; candidate exclusion detail revised by D24; B1 documentation complete, B3/B4 implementation pending |
+| D23 | Use a compact NestJS-to-Python AI contract: NestJS sends prepared three-state checks and distance when known; Python receives no raw geometry, coordinates, hashes or revisions | Keeps geographic calculations and application consistency in the authoritative backend while preserving evidence-backed AI reasoning | Approved 2026-10-04; B2 implemented, NestJS consistency verification pending B4 |
+| D24 | NestJS selects candidates and excludes a pair when any high-confidence check is distant, direction-conflicting, wholly behind the vehicle, or timing-conflicting; Python rejects such misrouted requests and returns English operator explanations only for candidates | Keeps exclusion decisions in the factual backend, prevents incomplete evidence from becoming an exclusion, and makes AI output accessible to the intended demo audience | Approved 2026-10-04; language revised by explicit approval, B2 refinement pending |
 
 ## 8. Open concerns and validation gates
 
@@ -204,6 +206,9 @@ For every proposed material change:
 | 2026-10-04 | 1.1 | Approved accelerated A/B/C sequence and D12–D15 | Explicit user approval |
 | 2026-10-04 | 1.2 | Approved six-hour Iteration 003 and D16–D21; supplied car-route limitation, latest vehicle state, optional Leaflet map and deferred operator recording documented | Explicit user approval; documentation only |
 | 2026-10-04 | 1.3 | Recorded D22 and B1 route-verification evidence: exact replay selection, deterministic AI bypass and assessment context consistency | Explicit user approval; B1 complete |
+| 2026-10-04 | 1.4 | Recorded D23: compact AI reasoning contract and NestJS-owned current-state verification | Explicit user approval; B2 revised and verified |
+| 2026-10-04 | 1.5 | Recorded D24: NestJS candidate selection, Python rejection of definite exclusions, and German candidate explanations | Explicit user approval; B2 revision |
+| 2026-10-04 | 1.6 | Revised D24: English candidate explanations | Explicit user approval |
 
 ## 10. Definition of MVP done
 

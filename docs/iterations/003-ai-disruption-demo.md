@@ -1,20 +1,20 @@
 # Iteration 003 — AI Disruption Demonstration
 
 **Project:** LieferRadar<br>
-**Status:** B1 complete; B2–B6 not started<br>
+**Status:** B1 complete; B2 response-quality refinement needs correction; B3–B6 not started<br>
 **Approval date:** 2026-10-04<br>
 **Dependencies:** Iterations 001 and 002; existing NestJS and Python services<br>
 **Budget:** Six development hours, including verification
 
-Authority: [MVP scope and decision register](../product/mvp-scope.md), decisions D16–D22. See [Accelerated delivery](../product/accelerated-delivery.md) and [Database architecture](../architecture/database.md). This specification combines the essential route/simulation and AI work from the earlier Iterations B and C.
+Authority: [MVP scope and decision register](../product/mvp-scope.md), decisions D16–D24. See [Accelerated delivery](../product/accelerated-delivery.md) and [Database architecture](../architecture/database.md). This specification combines the essential route/simulation and AI work from the earlier Iterations B and C.
 
 ### Implementation clarifications approved before B1
 
 1. Demo preparation must load the selected historical warning by its exact `(source, providerId)` and verify that the persisted record has `ingestionMode: REPLAY`. It must fail if that record is absent or if newer `LIVE` state prevents replay; it must never silently substitute a different or newer warning.
-2. A definite deterministic exclusion skips the LLM and returns a clearly identified deterministic assessment. Uncertain candidates remain eligible for AI assessment.
+2. NestJS selects candidates and skips the Python call for a definite deterministic exclusion. Python rejects a request containing a documented definite-exclusion state, so an accidental cross-service call cannot turn it into an AI result. Uncertain or incomplete evidence remains eligible for AI assessment.
 3. Every assessment is bound to the requested `vehicleRevision` and `warningContentHash`. NestJS must reject or require a fresh assessment if either current value differs when it would return the result.
 
-These clarifications extend the version 1 response contract with `decisionSource` and `deterministicExclusionReasons`; the request context already carries the revision and warning hash.
+NestJS retains vehicle revision and warning content hash for current-state validation; neither enters the Python contract.
 
 ## Goal and scope
 
@@ -100,94 +100,72 @@ The warning start falls inside the shipment window, but its missing end prevents
 
 NestJS prepares proximity to the remaining route, ahead/behind evidence, explicit direction compatibility, timing compatibility and provenance limitations. `queriedRoad` is retrieval context. Coordinate ordering is not sufficient direction evidence. Start with a documented experimental 25 m candidate tolerance; geometry alone does not prove relevance. Missing geometry, direction or timestamps remain explicit.
 
-Known opposite direction, an affected section entirely behind the vehicle, or known non-overlapping timing produces a deterministic exclusion that AI cannot override. Missing event end is uncertainty, not an invented duration or automatic resolution. Preserve provider timestamp omission versus explicit null.
+A calculated distance outside the configured tolerance, known opposite direction, an affected section entirely behind the vehicle, or known non-overlapping timing produces a deterministic exclusion that AI cannot override. Missing event end is uncertainty, not an invented duration or automatic resolution. Preserve provider timestamp omission versus explicit null.
 
 ### Version 1 wire schemas
 
-The following schemas define the intended service contract, not existing implementation. Use UTC ISO strings for instants, Pydantic in Python and Zod in NestJS. Bound strings, arrays, geometry size and request size during implementation.
+The following schemas define the compact NestJS-to-Python reasoning contract. Use UTC ISO strings for instants, Pydantic in Python and Zod in NestJS. NestJS owns raw geometry, coordinates, hashes, revisions and current-state consistency checks; Python receives only prepared evidence and does not calculate geographic values.
 
 ```ts
-type JsonValue = null | boolean | number | string
-  | JsonValue[] | { [key: string]: JsonValue };
-type Position = [longitude: number, latitude: number];
 type ProviderTimestamp =
   | { kind: 'omitted' }
   | { kind: 'explicit-null' }
   | { kind: 'value'; value: string };
 
-interface AssessmentContext {
-  shipmentId: string;
-  routeHash: string;
-  vehicleRevision: number;
-  simulatedAt: string;
-  disruptionId: string;
-  warningContentHash: string;
-}
-
-interface EvidenceFact {
+interface EvidenceReference {
   id: string;
-  kind: 'PROVIDER' | 'ROUTE' | 'SIMULATED' | 'DETERMINISTIC' | 'LIMITATION';
-  sourceRef: string; // e.g. warning.subtitle or route.metadata.query.profile
-  value: JsonValue;
 }
 
 interface DisruptionAssessmentRequest {
-  contractVersion: '1';
-  requestId: string;
-  context: AssessmentContext;
+  assessmentId: string;
   shipment: {
+    id: string;
     pickupCity: string;
     destinationCity: string;
-    plannedRoute: string[];
     pickupAt: string;
     plannedDeliveryAt: string;
   };
-  route: {
-    profile: 'driving-car';
-    distanceMetres: number;
-    capturedAt: string;
-    attribution: string;
-  };
   vehicle: {
-    vehicleId: string;
+    id: string;
     simulated: true;
-    position: Position;
-    distanceAlongRouteMetres: number;
+    simulatedAt: string;
   };
-  warning: {
+  disruption: {
+    evidenceId: string;
     source: string;
     providerId: string;
     ingestionMode: 'LIVE' | 'REPLAY';
     capturedAt: string;
-    lastSeenAt: string;
     queriedRoad: string;
     title: string;
     subtitle: string | null;
-    description: string[];
+    descriptions: string[];
     startTimestamp: ProviderTimestamp;
     endTimestamp: ProviderTimestamp;
-    delayMinutes: number | null; // reported warning delay, not shipment delay
-    geometry: JsonValue;
+    delayMinutes: number | null;
   };
-  deterministicChecks: {
-    geographic: 'NEAR_REMAINING_ROUTE' | 'DISTANT' | 'UNKNOWN';
-    minimumDistanceMetres: number | null;
-    toleranceMetres: number;
-    routePosition: 'AHEAD_OR_ALONGSIDE' | 'BEHIND' | 'UNKNOWN';
-    direction: 'COMPATIBLE' | 'CONFLICTING' | 'UNKNOWN';
-    timing: 'POSSIBLE' | 'CONFLICTING' | 'UNKNOWN';
-    exclusionReasons: string[];
+  checks: {
+    geographic: EvidenceReference & {
+      state: 'NEAR_REMAINING_ROUTE' | 'DISTANT' | 'UNKNOWN';
+      distanceMetres: number | null;
+      toleranceMetres: number | null;
+    };
+    direction: EvidenceReference & {
+      state: 'COMPATIBLE' | 'CONFLICTING' | 'UNKNOWN';
+    };
+    routePosition: EvidenceReference & {
+      state: 'AHEAD_OR_ALONGSIDE' | 'BEHIND' | 'UNKNOWN';
+    };
+    timing: EvidenceReference & {
+      state: 'POSSIBLE' | 'CONFLICTING' | 'UNKNOWN';
+    };
   };
-  facts: EvidenceFact[];
+  limitations: Array<EvidenceReference & { description: string }>;
 }
 
 interface DisruptionAssessment {
-  contractVersion: '1';
-  requestId: string;
-  context: AssessmentContext;
-  decisionSource: 'DETERMINISTIC' | 'AI';
-  deterministicExclusionReasons: string[];
-  relevance: 'POSSIBLE' | 'UNLIKELY' | 'INSUFFICIENT_EVIDENCE';
+  assessmentId: string;
+  operatorMessage: string;
   supportingEvidence: Array<{ factIds: string[]; explanation: string }>;
   missingEvidence: string[];
   uncertainty: string[];
@@ -200,13 +178,13 @@ interface DisruptionAssessment {
 }
 ```
 
-For a deterministic result, `decisionSource` is `DETERMINISTIC`, `deterministicExclusionReasons` is nonempty, and no LLM request is made. For an AI result, `decisionSource` is `AI` and the exclusion-reason array is empty. Python echoes the exact trusted context it received. Before returning any assessment, NestJS compares its echoed `vehicleRevision` and `warningContentHash` with current state; a mismatch requires a fresh assessment rather than displaying stale reasoning.
+NestJS must not call Python when any high-confidence check establishes a definite exclusion: `DISTANT` geographic evidence (with a calculated distance and tolerance), `CONFLICTING` direction, `BEHIND` route position, or `CONFLICTING` timing. Each means the backend has sufficient factual evidence for that check; `UNKNOWN` and missing data never establish exclusion. Python rejects requests containing those states, so a faulty integration fails rather than producing an AI result. Python owns `assessmentId` and response metadata; the LLM returns only the reasoning fields.
 
-Service code attaches trusted context and request IDs; these are not generated by the LLM. Validate returned fact references against the supplied set. Unsupported references or contradictory claims fail validation. Inference and possible consequences must remain distinct from supplied facts. Do not offer `CONFIRMED_IMPACT` or invented numeric shipment delays/ETAs. The provider's 18-minute report may be cited with its source and limitations.
+All `operatorMessage`, evidence explanations, missing-evidence statements, uncertainty, possible consequences and action rationales are English. Stable evidence IDs consist of the disruption evidence ID, each check ID and each limitation ID. Python validates returned references against that set. Every supplied limitation must be cited in `supportingEvidence`, where its explanation makes it visible to the operator; known limitations remain distinct from information genuinely absent from the request. Original German descriptions and relevant provider times remain available as untrusted evidence, while raw GeoJSON, coordinates, raw payload, route hashes, warning hashes and vehicle revisions never enter the Python contract or LLM prompt. Inference and possible consequences must remain distinct from supplied facts. Do not offer `CONFIRMED_IMPACT` or invented numeric shipment delays/ETAs. The provider's 18-minute report may be cited with its source and limitations.
 
-Use one asynchronous structured LLM invocation through the existing client boundary, with an approximately 25-second overall reasoning deadline, automatic retries disabled initially, bounded output and a slightly longer NestJS HTTP timeout. Configure a model with structured-output support and verify account access. Preserve FastAPI `response_model` validation and validate again in NestJS. Log request ID, model, duration and outcome without secrets/contact information. Treat provider text as untrusted data, not instructions.
+Use one asynchronous structured LLM invocation through the existing client boundary, with an approximately 25-second overall reasoning deadline, automatic retries disabled initially, bounded output and a slightly longer NestJS HTTP timeout. Configure a model with structured-output support and verify account access. Preserve FastAPI `response_model` validation and validate again in NestJS. Log assessment ID, model, duration and outcome without secrets/contact information. Treat provider text as untrusted data, not instructions.
 
-Timeout, provider failure or invalid output returns an explicit assessment-unavailable error; retain deterministic evidence for display. No fabricated success or automatic action. Changing vehicle revision or warning content invalidates displayed assessment context; do not deduplicate solely by warning hash or add assessment caching.
+Timeout, provider failure or invalid output returns an explicit assessment-unavailable error; retain deterministic evidence for display. No fabricated success or automatic action. NestJS invalidates an assessment if its retained vehicle revision or warning content hash no longer matches current state; do not deduplicate solely by warning hash or add assessment caching.
 
 ## Checkpoints and verification
 
@@ -242,15 +220,15 @@ Record the additional offline comparison method/results; the commands above alon
 
 ### B2 — Python structured reasoning
 
-**Tasks:** Add Pydantic contract schemas, thin route, prompt and reasoning service; configure chat client separately from embeddings. Add mocked relevant, opposite-direction and insufficient-evidence cases, invalid references/output and timeout handling. Do not import ignored legacy ticket modules or query RAG.
+**Tasks:** Add Pydantic contract schemas, thin route, prompt and reasoning service; configure chat client separately from embeddings. NestJS selects candidates; Python rejects documented definite-exclusion states and reasons only about valid candidates. Add mocked candidate, opposite-direction rejection, insufficient-evidence, invalid references/output and timeout cases. All human-readable result fields are English. Do not import ignored legacy ticket modules or query RAG.
 
-**Acceptance:** Validated version 1 results cite supplied facts, preserve uncertainty and recommend human review. Deterministic exclusions cannot become positive impact claims. Failures have explicit HTTP semantics; no supply-chain writes occur.
+**Acceptance:** Validated version 1 candidate explanations cite supplied facts, preserve uncertainty, use English human-readable output and recommend human review. Definite exclusions cannot become AI results; incomplete evidence remains assessable. Failures have explicit HTTP semantics; no supply-chain writes occur.
 
 **Verification commands** (from `services/ai-service`):
 
 ```bash
 uv run --locked python -m unittest discover -s tests -p 'test_*.py' -v
-uv run --locked python -c 'from main import app; assert any(r.path == "/analysis/disruption" for r in app.routes)'
+uv run --locked python -c 'from main import app; assert "/analysis/disruption" in app.openapi()["paths"]'
 ```
 
 Use mocked calls for automated tests; verify FastAPI request/response behavior using the installed HTTP tooling. Configured key/model access remains a separate live gate in B4.
@@ -274,7 +252,7 @@ Also run `npx tsc --noEmit --incremental false` and focused `npx eslint "src/dem
 
 ### B4 — Complete backend assessment
 
-**Tasks:** Prepare deterministic remaining-route, direction, timing and provenance evidence; return definite deterministic exclusions without calling Python; add AI client and validated assessment API for uncertain candidates; log bounded-call outcomes. Compare echoed assessment context with the current vehicle revision and warning content hash before returning a result. Perform one real NestJS → FastAPI → LLM assessment. Add a separate explicit-live evaluation script for the three cases; do not make live calls part of normal tests.
+**Tasks:** Prepare deterministic remaining-route, direction, timing and provenance evidence; exclude definite non-candidates without calling Python; add AI client and validated assessment API for uncertain candidates; log bounded-call outcomes. Compare retained assessment context with the current vehicle revision and warning content hash before returning a result. Perform one real NestJS → FastAPI → LLM assessment. Add a separate explicit-live evaluation script for the three cases; do not make live calls part of normal tests.
 
 **Acceptance:** The SHP-002 historical scenario yields a validated result with source-backed evidence and uncertainty. Opposite-direction, behind-vehicle and conflicting-timing controls are excluded; insufficient data stays explicit. Database and Python errors propagate appropriately. New vehicle context can receive a new assessment without a warning-content change.
 
@@ -338,7 +316,7 @@ From the repository root, run `git diff --check` and review `git diff` plus new 
 Update this checklist and table after each checkpoint. Record date, commands, exit/results, manual/live evidence, actual time, blockers and remaining issues. A started checkpoint is not complete because its time budget expired.
 
 - [x] B1 — Route/provenance accepted.
-- [ ] B2 — Python structured reasoning and mocked cases verified.
+- [ ] B2 — Response-quality refinement needs live-evaluation correction.
 - [ ] B3 — Latest vehicle persistence and deterministic APIs verified.
 - [ ] B4 — Real backend assessment and evaluation verified.
 - [ ] B5 — Frontend delivered or time-limit fallback explicitly recorded.
@@ -347,10 +325,14 @@ Update this checklist and table after each checkpoint. Record date, commands, ex
 | Checkpoint | Status | Verification results | Outstanding issues |
 | ---------- | ------ | -------------------- | ------------------ |
 | B1 | Complete — 2026-10-04 | `node services/api/scripts/verify-luebeck-hamburg-a1-route.js`, SHA-256, route-shape verification and `git diff --check` passed. See [route verification evidence](../research/luebeck-hamburg-a1-route-verification.md). | Passenger-car geometry and subsequent capture do not establish HGV suitability, affected carriageway or historical impact. B3 must prove exact REPLAY warning selection. |
-| B2 | Not started | No checkpoint tests run | Implement contract/reasoning; choose accessible structured-output model |
+| B2 | Needs correction — 2026-10-04 | The response-quality prompt updates passed 16 mocked schema, reasoning and route tests; FastAPI OpenAPI and Python compilation checks passed with a temporary valid `DEBUG=false` environment. The bounded SHP-002 live call was rejected by stable limitation-coverage validation, so no assessment was returned. | The model did not reliably cite every supplied limitation in `supportingEvidence.factIds`, despite the prompt instruction. Keep validation; decide whether to use deterministic limitation-response construction or a contract revision before accepting the refinement. NestJS current-state verification remains B4. Local `.env` currently has invalid `DEBUG=release`, so unmodified import fails before startup. |
 | B3 | Not started | No checkpoint tests run | Migration, demo preparation, route loading and persistence |
 | B4 | Not started | No real LLM assessment or evaluation run | Key/quota/model access and end-to-end integration |
 | B5 | Not started; optional | No frontend checks run | 45-minute target / 60-minute maximum; retain fallback |
 | B6 | Not started | No final acceptance checks run | Await required checkpoints; document incomplete work honestly |
 
-**B1 implementation record:** An offline verification script and reproducible route evidence have been added. No demo module, migration, vehicle state, replay execution, live collection or LLM call was introduced. B2 is the next checkpoint.
+**B2 implementation record:** The Python endpoint, compact Pydantic contract, detailed German system prompt and bounded mocked reasoning path are implemented. `DisruptionReasoningService.assess()` now explicitly prepares evidence/messages, invokes the LLM within its deadline, validates model output and evidence references, then attaches the trusted assessment ID. NestJS selects candidates and must exclude a pair when any high-confidence check is `DISTANT`, `CONFLICTING`, `BEHIND`, or timing-`CONFLICTING`; Python rejects those misrouted states. Unknown evidence remains assessable. NestJS-supplied checks include calculated geographic distance when known and explicit unknown states; Python does not receive raw geometry, coordinates, hashes or revisions.
+
+**B2 live evaluation — 2026-10-04:** The initial live call omitted the later-captured passenger-car route limitation and was rejected by stable-ID coverage validation. A subsequent correction adds an explicit per-request list of required check and limitation IDs; every supplied limitation must be cited in `supportingEvidence`, while `missingEvidence` remains for information absent from the request. The earlier repeated call returned German output with all four checks and all four limitation IDs, described `POSSIBLE` as possible overlap, identified the route as later captured with a passenger-car profile, and preserved historical replay and simulated-vehicle uncertainty. It did not present the provider-reported 18 minutes as a confirmed or minimum shipment delay.
+
+**B2 response-quality recheck — 2026-10-04:** The approved operator-message, no-technical-ID and missing-evidence prompt improvements passed mocked tests. The live SHP-002 call with explicit missing-end-time, simulated-vehicle and passenger-car-route limitations was rejected because the model omitted one or more required limitation IDs from `supportingEvidence.factIds`; no API response was returned. The guard prevented an incomplete response from reaching an operator. A reliable correction needs explicit approval: either construct limitation acknowledgement entries deterministically from trusted NestJS limitations, or extend the contract with structured limitation acknowledgements. B2 and B3 remain unaccepted pending that choice.
