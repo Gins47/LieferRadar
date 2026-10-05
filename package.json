@@ -1,0 +1,16 @@
+{
+  "name": "lieferradar",
+  "private": true,
+  "workspaces": [
+    "services/*"
+  ],
+  "scripts": {
+    "web:dev": "npm --workspace liefer-radar-web run dev",
+    "web:typecheck": "npm --workspace liefer-radar-web run typecheck",
+    "web:lint": "npm --workspace liefer-radar-web run lint",
+    "web:build": "npm --workspace liefer-radar-web run build"
+  },
+  "engines": {
+    "node": ">=20"
+  }
+}

@@ -3,6 +3,8 @@ node_modules/
 dist/
 build/
 coverage/
+.next/
+*.tsbuildinfo
 .pytest_cache/
 *.egg-info/
 

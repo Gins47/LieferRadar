@@ -40,6 +40,13 @@ Operator interface.
 Displays backend state and AI explanations.
 Does not duplicate backend business rules.
 
+### Map presentation
+
+B5 uses a lightweight illustrative route visualization rather than an interactive
+map. If interactive geographic visualization is needed later, Leaflet is the
+preferred map library. Map rendering remains presentation only: NestJS continues
+to own all route, disruption, and relevance calculations.
+
 ## Core flow
 
 External evidence
