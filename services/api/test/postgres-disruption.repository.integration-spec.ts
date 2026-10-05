@@ -524,6 +524,41 @@ describe('PostgresDisruptionRepository', () => {
     });
   });
 
+  it('returns a resolved LIVE warning observed today on a saved shipment road', async () => {
+    const observedAt = new Date('2026-10-03T07:00:00.000Z');
+    const persisted = await repository.upsertObservation(
+      createObservation({
+        providerId: 'A1-LIVE-RESOLVED',
+        ingestionMode: 'LIVE',
+        lifecycleStatus: 'RESOLVED',
+        resolvedAt: observedAt,
+        capturedAt: observedAt,
+        lastSeenAt: observedAt,
+        contentChangedAt: observedAt,
+      }),
+    );
+
+    await expect(
+      repository.findLiveWarnings({
+        roads: ['A1'],
+        observedOn: '2026-10-03',
+        page: 1,
+        limit: 20,
+      }),
+    ).resolves.toMatchObject({
+      total: 1,
+      items: [
+        {
+          id: persisted.disruption.id,
+          ingestionMode: 'LIVE',
+          lifecycleStatus: 'RESOLVED',
+          lastSeenAt: observedAt,
+          lastLiveSeenAt: observedAt,
+        },
+      ],
+    });
+  });
+
   it('uses inclusive Berlin lower bounds and exclusive upper bounds', async () => {
     const lowerBound = await repository.upsertObservation(
       createObservation({

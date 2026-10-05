@@ -33,7 +33,6 @@ describe('PostgresDisruptionRepository live warning reads', () => {
           ingestionMode: 'LIVE',
           capturedAt: observedAt,
           lastSeenAt: observedAt,
-          lastLiveSeenAt: observedAt,
           contentChangedAt: observedAt,
         },
       ],
@@ -67,6 +66,9 @@ describe('PostgresDisruptionRepository live warning reads', () => {
     expect(sql).toContain("source = 'autobahn'");
     expect(sql).toContain("category = 'WARNING'");
     expect(sql).toContain("TIME ZONE 'Europe/Berlin'");
+    expect(sql).toContain('last_seen_at');
+    expect(sql).toContain('ORDER BY "lastSeenAt" DESC, id ASC');
+    expect(sql).not.toContain('last_live_seen_at');
     expect(sql).toContain('count(*)::integer AS total');
     expect(values).toEqual([['A1'], '2026-10-05', 20, 20]);
   });

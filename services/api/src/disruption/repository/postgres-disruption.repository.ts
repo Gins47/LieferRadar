@@ -58,7 +58,6 @@ interface DisruptionRow {
   ingestionMode: DisruptionIngestionMode;
   capturedAt: Date;
   lastSeenAt: Date;
-  lastLiveSeenAt: Date | null;
   contentChangedAt: Date;
 }
 
@@ -89,7 +88,6 @@ const SELECT_DISRUPTION_COLUMNS = `
   ingestion_mode AS "ingestionMode",
   captured_at AS "capturedAt",
   last_seen_at AS "lastSeenAt",
-  last_live_seen_at AS "lastLiveSeenAt",
   content_changed_at AS "contentChangedAt"`;
 
 const DATE_FIELD_COLUMNS: Record<
@@ -147,7 +145,7 @@ function mapDisruption(row: DisruptionRow): Disruption {
     ingestionMode: row.ingestionMode,
     capturedAt: row.capturedAt,
     lastSeenAt: row.lastSeenAt,
-    lastLiveSeenAt: row.lastLiveSeenAt,
+    lastLiveSeenAt: row.ingestionMode === 'LIVE' ? row.lastSeenAt : null,
     contentChangedAt: row.contentChangedAt,
   };
 }
@@ -249,7 +247,6 @@ function queryValues(disruption: Disruption): unknown[] {
     disruption.ingestionMode,
     disruption.capturedAt,
     disruption.lastSeenAt,
-    disruption.lastLiveSeenAt,
     disruption.contentChangedAt,
   ];
 }
@@ -429,19 +426,19 @@ export class PostgresDisruptionRepository {
           AND source = 'autobahn'
           AND category = 'WARNING'
           AND queried_road = ANY($1::text[])
-          AND last_live_seen_at >= ($2::date::timestamp AT TIME ZONE 'Europe/Berlin')
-          AND last_live_seen_at < (($2::date + 1)::timestamp AT TIME ZONE 'Europe/Berlin')
+          AND last_seen_at >= ($2::date::timestamp AT TIME ZONE 'Europe/Berlin')
+          AND last_seen_at < (($2::date + 1)::timestamp AT TIME ZONE 'Europe/Berlin')
       ), total AS (
         SELECT count(*)::integer AS total FROM filtered
       ), paged AS (
         SELECT * FROM filtered
-        ORDER BY last_live_seen_at DESC, id ASC
+        ORDER BY "lastSeenAt" DESC, id ASC
         LIMIT $3 OFFSET $4
       )
       SELECT total.total, paged.*
       FROM total
       LEFT JOIN paged ON TRUE
-      ORDER BY paged.last_live_seen_at DESC NULLS LAST, paged.id ASC NULLS LAST`,
+      ORDER BY paged."lastSeenAt" DESC NULLS LAST, paged.id ASC NULLS LAST`,
       [query.roads, query.observedOn, query.limit, offset],
     );
     const first = result.rows[0];
@@ -465,12 +462,11 @@ export class PostgresDisruptionRepository {
         start_timestamp_present, end_timestamp, end_timestamp_present, future,
         abnormal_traffic_type, delay_minutes, average_speed_kmh, coordinate,
         geometry, raw_data, content_hash, lifecycle_status, resolved_at,
-        ingestion_mode, captured_at, last_seen_at, last_live_seen_at,
-        content_changed_at
+        ingestion_mode, captured_at, last_seen_at, content_changed_at
       ) VALUES (
         $1, $2, $3, $4, $5, $6, $7, $8, $9::jsonb, $10, $11, $12, $13, $14,
         $15, $16, $17, $18::jsonb, $19::jsonb, $20::jsonb, $21, $22, $23,
-        $24, $25, $26, $27, $28
+        $24, $25, $26, $27
       ) ON CONFLICT (source, provider_id) DO NOTHING
       RETURNING ${SELECT_DISRUPTION_COLUMNS}`,
       queryValues(disruption),
@@ -508,8 +504,7 @@ export class PostgresDisruptionRepository {
         ingestion_mode = $24,
         captured_at = $25,
         last_seen_at = $26,
-        last_live_seen_at = $27,
-        content_changed_at = $28
+        content_changed_at = $27
       WHERE source = $2 AND provider_id = $3 AND id = $1
       RETURNING ${SELECT_DISRUPTION_COLUMNS}`,
       queryValues(disruption),

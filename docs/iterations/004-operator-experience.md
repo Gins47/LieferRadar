@@ -790,9 +790,9 @@ AI-quality iteration.
 
 - [x] B1 — Operator read models
 - [ ] B1 checkpoint review
-- [ ] B2 — Operations Dashboard + Live Warnings
+- [x] B2 — Operations Dashboard + Live Warnings
 - [ ] B2 checkpoint review
-- [ ] B3 — Shipment detail + compact AI assessment
+- [x] B3 — Shipment detail + compact AI assessment
 - [ ] B3 checkpoint review
 - [ ] Iteration 004 final verification
 
@@ -816,6 +816,45 @@ ingestion, mutation, FastAPI or LLM call was added.
 Focused verification passed: 4 Jest suites / 16 tests; TypeScript
 `--noEmit`; API build; and lint for the touched API surface. `git diff --check`
 passed.
+
+## B2 implementation record — 2026-10-05
+
+Implemented the read-only Operations dashboard at `/` and Live Warnings at
+`/warnings`, with minimal top-level navigation. Both browser pages use
+same-origin Next.js proxy routes to consume the B1 Operations endpoints. The
+dashboard renders only NestJS-provided counts and review states: START remains
+outside Needs Attention with its warning-not-yet-observed reason; a refreshed
+NEAR_DISRUPTION scenario appears under Needs Attention. Unevaluated shipments
+are not described as safe or unaffected.
+
+Live Warnings renders only the B1-provided LIVE warning fields, makes last
+observation time visible, supplies an honest empty/error state, and uses
+simple Previous/Next controls when pagination needs them. The accepted B5
+SHP-002 detail page remains available at `/shipments/SHP-002`, including its
+existing controls and assessment behavior; B3 redesign remains deferred.
+
+Focused verification passed: web typecheck, lint, production build and
+`git diff --check`.
+
+## B3 implementation record — 2026-10-05
+
+Refined `/shipments/SHP-002` into an operator review page while preserving the
+existing backend assessment contract. Removed all operator-facing START and
+NEAR_DISRUPTION controls; interview/demo state remains controlled through the
+guarded API. The page renders the backend-provided review state and reason,
+four deterministic checks, fictional vehicle state, route provenance and
+historical REPLAY warning before explicit AI analysis.
+
+The assessed result is now one primary operator card emphasizing the unchanged
+operator message, uncertainty, concise recommended human-review actions and
+the human-review-required status. A native `Evidence & limitations` disclosure
+retains supporting and missing evidence, backend limitations, possible
+consequences and the assessment ID. Live Warnings now gives the existing
+normalized persisted provider description prominent presentation beneath the
+road/title; no API or persistence change was needed.
+
+Focused verification passed: web typecheck, lint, production build and
+`git diff --check`.
 
 ---
 
