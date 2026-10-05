@@ -13,6 +13,7 @@ The backend executes approved actions.
 
 - `services/api`: NestJS application and business domain
 - `services/ai-service`: Python AI reasoning and RAG
+- `services/web`: Next.js operator presentation layer
 
 ## Architecture Rules
 

@@ -2,7 +2,8 @@
   "name": "lieferradar",
   "private": true,
   "workspaces": [
-    "services/*"
+    "services/api",
+    "services/web"
   ],
   "scripts": {
     "web:dev": "npm --workspace liefer-radar-web run dev",

@@ -193,7 +193,7 @@ export default function DemoPage() {
             <h1 className="mt-1 text-3xl font-semibold tracking-tight text-slate-950">Disruption assessment demo</h1>
             <p className="mt-2 max-w-2xl text-sm leading-6 text-slate-600">A fictional SHP-002 vehicle and recorded A1 warning, prepared for operator review.</p>
           </div>
-          <Badge variant="info" className="w-fit">Local demonstration</Badge>
+          <Badge variant="secondary" className="w-fit bg-sky-100 text-sky-800">Local demonstration</Badge>
         </header>
 
         {error && (
@@ -214,7 +214,7 @@ export default function DemoPage() {
                     <CardTitle>{scenario.shipment.id}: {scenario.shipment.pickupLocation.city} → {scenario.shipment.destination.city}</CardTitle>
                     <CardDescription>Saved A1 shipment scenario</CardDescription>
                   </div>
-                  <Badge variant="success">{scenario.shipment.status}</Badge>
+                  <Badge className="bg-emerald-100 text-emerald-800">{scenario.shipment.status}</Badge>
                 </div>
               </CardHeader>
               <CardContent className="grid gap-3 text-sm sm:grid-cols-2">
@@ -227,7 +227,7 @@ export default function DemoPage() {
               <CardHeader>
                 <div className="flex items-start justify-between gap-3">
                   <div><CardTitle>{scenario.vehicle.vehicleId}</CardTitle><CardDescription>Fictional, simulated vehicle state</CardDescription></div>
-                  <Badge variant="warning">Simulated</Badge>
+                  <Badge variant="secondary" className="bg-amber-100 text-amber-900">Simulated</Badge>
                 </div>
               </CardHeader>
               <CardContent className="grid gap-3 text-sm sm:grid-cols-2">
@@ -256,7 +256,7 @@ export default function DemoPage() {
 
           <Card>
             <CardHeader>
-              <div className="flex items-start justify-between gap-3"><div><CardTitle>Historical disruption</CardTitle><CardDescription>{scenario.warning.title}</CardDescription></div><Badge variant="warning">Historical Replay · {scenario.warning.ingestionMode}</Badge></div>
+              <div className="flex items-start justify-between gap-3"><div><CardTitle>Historical disruption</CardTitle><CardDescription>{scenario.warning.title}</CardDescription></div><Badge variant="secondary" className="bg-amber-100 text-amber-900">Historical Replay · {scenario.warning.ingestionMode}</Badge></div>
             </CardHeader>
             <CardContent className="space-y-3 text-sm">
               <p><span className="font-medium">Direction:</span> {scenario.warning.subtitle ?? "Not supplied"}</p>
@@ -292,7 +292,7 @@ export default function DemoPage() {
               <Card><CardHeader><CardTitle>Uncertainty</CardTitle></CardHeader><CardContent><StringList values={assessment.assessment.uncertainty} empty="No additional uncertainty reported." /></CardContent></Card>
               <Card><CardHeader><CardTitle>Possible consequences</CardTitle></CardHeader><CardContent><StringList values={assessment.assessment.possibleConsequences} empty="No possible consequences reported." /></CardContent></Card>
             </section>
-            <Card><CardHeader><CardTitle>Recommended human-review actions</CardTitle></CardHeader><CardContent className="space-y-3">{assessment.assessment.recommendedActions.map((action) => <div key={action.action} className="rounded-lg border border-slate-200 p-3"><Badge variant="info">{action.action}</Badge><p className="mt-2 text-sm leading-6 text-slate-700">{action.rationale}</p></div>)}</CardContent></Card>
+            <Card><CardHeader><CardTitle>Recommended human-review actions</CardTitle></CardHeader><CardContent className="space-y-3">{assessment.assessment.recommendedActions.map((action) => <div key={action.action} className="rounded-lg border border-slate-200 p-3"><Badge variant="secondary" className="bg-sky-100 text-sky-800">{action.action}</Badge><p className="mt-2 text-sm leading-6 text-slate-700">{action.rationale}</p></div>)}</CardContent></Card>
           </section>}
         </>}
       </div>

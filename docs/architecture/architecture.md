@@ -34,11 +34,16 @@ Does not own:
 - candidate selection
 - operational actions
 
-### apps/web
+### services/web
 
 Operator interface.
 Displays backend state and AI explanations.
 Does not duplicate backend business rules.
+
+`services/api` and `services/web` are the repository's npm workspace packages.
+`services/ai-service` remains managed by its Python environment and dependency tooling.
+
+The web service uses TypeScript, Tailwind CSS and shadcn/ui primitives.
 
 ### Map presentation
 
