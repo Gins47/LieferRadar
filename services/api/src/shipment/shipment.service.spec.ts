@@ -38,6 +38,7 @@ describe('ShipmentService', () => {
 
   beforeEach(async () => {
     repository = {
+      findAllShipments: jest.fn(),
       findSupplierById: jest.fn(),
       findProductById: jest.fn(),
       findShipmentById: jest.fn(),

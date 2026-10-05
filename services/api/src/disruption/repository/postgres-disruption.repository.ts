@@ -24,6 +24,13 @@ export interface DisruptionObservationResult {
   disruption: Disruption;
 }
 
+export interface LiveWarningQuery {
+  roads: readonly string[];
+  observedOn: string;
+  page: number;
+  limit: number;
+}
+
 interface DisruptionRow {
   id: string;
   source: string;
@@ -397,6 +404,45 @@ export class PostgresDisruptionRepository {
       LEFT JOIN paged ON TRUE
       ORDER BY paged."capturedAt" DESC NULLS LAST, paged.id ASC NULLS LAST`,
       values,
+    );
+    const first = result.rows[0];
+
+    return {
+      items: result.rows.filter((row) => row.id !== null).map(mapDisruption),
+      page: query.page,
+      limit: query.limit,
+      total: first?.total ?? 0,
+    };
+  }
+
+  async findLiveWarnings(query: LiveWarningQuery): Promise<DisruptionPage> {
+    if (query.roads.length === 0) {
+      return { items: [], page: query.page, limit: query.limit, total: 0 };
+    }
+
+    const offset = (query.page - 1) * query.limit;
+    const result = await this.database.query<DisruptionRow & { total: number }>(
+      `WITH filtered AS (
+        SELECT ${SELECT_DISRUPTION_COLUMNS}
+        FROM disruptions
+        WHERE ingestion_mode = 'LIVE'
+          AND source = 'autobahn'
+          AND category = 'WARNING'
+          AND queried_road = ANY($1::text[])
+          AND last_live_seen_at >= ($2::date::timestamp AT TIME ZONE 'Europe/Berlin')
+          AND last_live_seen_at < (($2::date + 1)::timestamp AT TIME ZONE 'Europe/Berlin')
+      ), total AS (
+        SELECT count(*)::integer AS total FROM filtered
+      ), paged AS (
+        SELECT * FROM filtered
+        ORDER BY last_live_seen_at DESC, id ASC
+        LIMIT $3 OFFSET $4
+      )
+      SELECT total.total, paged.*
+      FROM total
+      LEFT JOIN paged ON TRUE
+      ORDER BY paged.last_live_seen_at DESC NULLS LAST, paged.id ASC NULLS LAST`,
+      [query.roads, query.observedOn, query.limit, offset],
     );
     const first = result.rows[0];
 

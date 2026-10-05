@@ -37,4 +37,11 @@ export class ShipmentService {
       plannedDeliveryAt: shipment.plannedDeliveryAt,
     };
   }
+
+  async getShipments(): Promise<ShipmentView[]> {
+    const shipments = await this.logisticsRepository.findAllShipments();
+    return Promise.all(
+      shipments.map((shipment) => this.getShipment(shipment.id)),
+    );
+  }
 }

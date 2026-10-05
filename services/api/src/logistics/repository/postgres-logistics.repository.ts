@@ -66,6 +66,26 @@ function mapShipment(row: ShipmentRow): Shipment {
 export class PostgresLogisticsRepository implements LogisticsRepository {
   constructor(private readonly database: DatabaseService) {}
 
+  async findAllShipments(): Promise<Shipment[]> {
+    const result = await this.database.query<ShipmentRow>(
+      `SELECT
+        id,
+        supplier_id AS "supplierId",
+        product_id AS "productId",
+        quantity,
+        pickup_location AS "pickupLocation",
+        destination,
+        planned_route AS "plannedRoute",
+        status,
+        pickup_at AS "pickupAt",
+        planned_delivery_at AS "plannedDeliveryAt"
+      FROM shipments
+      ORDER BY id ASC`,
+    );
+
+    return result.rows.map(mapShipment);
+  }
+
   async findSupplierById(id: string): Promise<Supplier | undefined> {
     const result = await this.database.query<SupplierRow>(
       'SELECT id, name, location FROM suppliers WHERE id = $1',

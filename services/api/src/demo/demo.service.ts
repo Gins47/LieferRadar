@@ -16,6 +16,7 @@ import { DemoVehicleState } from './model/demo-vehicle-state.model';
 import { DemoVehiclePositionRequest } from './demo-position.dto';
 import { PostgresDemoVehicleRepository } from './repository/postgres-demo-vehicle.repository';
 import { LuebeckHamburgRouteService } from './route/luebeck-hamburg-route.service';
+import { DemoEvidenceService } from './demo-evidence.service';
 
 export const NEAR_DISRUPTION_ELAPSED_SECONDS = 3_840;
 
@@ -61,12 +62,14 @@ export class DemoService {
     private readonly disruptions: PostgresDisruptionRepository,
     private readonly vehicles: PostgresDemoVehicleRepository,
     private readonly route: LuebeckHamburgRouteService,
+    private readonly evidence: DemoEvidenceService,
   ) {}
 
   async getShipmentScenario(shipmentId: string) {
     const { shipment, vehicle, warning } =
       await this.getPreparedScenario(shipmentId);
     const route = this.route.getRoute();
+    const operatorReview = this.getOperatorReview(shipment, vehicle, warning);
 
     return {
       shipment,
@@ -77,6 +80,59 @@ export class DemoService {
         provenance: route.provenance,
       },
       warning: mapWarning(warning),
+      operatorReview,
+    };
+  }
+
+  getOperatorReview(
+    shipment: Awaited<ReturnType<ShipmentService['getShipment']>>,
+    vehicle: DemoVehicleState,
+    warning: Disruption,
+  ) {
+    const evidence = this.evidence.prepare(
+      shipment,
+      vehicle,
+      warning,
+      '00000000-0000-4000-8000-000000000004',
+    );
+    const checks = evidence.request.checks;
+    const observed = vehicle.simulatedAt >= warning.capturedAt;
+    const positive =
+      checks.geographic.state === 'NEAR_REMAINING_ROUTE' &&
+      checks.direction.state === 'COMPATIBLE' &&
+      checks.routePosition.state === 'AHEAD_OR_ALONGSIDE' &&
+      checks.timing.state === 'POSSIBLE';
+    const hasUnknown = Object.values(checks).some(
+      (check) => check.state === 'UNKNOWN',
+    );
+
+    const state = !observed
+      ? 'WARNING_NOT_YET_OBSERVED'
+      : evidence.excluded
+        ? 'EXCLUDED'
+        : positive
+          ? 'NEEDS_REVIEW'
+          : hasUnknown
+            ? 'INCOMPLETE_EVIDENCE'
+            : 'INCOMPLETE_EVIDENCE';
+    const reason = !observed
+      ? 'The historical warning had not yet been observed at the simulated vehicle time.'
+      : evidence.excluded
+        ? `A deterministic check excludes this scenario: ${evidence.exclusionReasons.join(', ')}.`
+        : positive
+          ? 'The observable historical warning is near the remaining route, ahead of the simulated vehicle, direction-compatible and timing-possible.'
+          : 'The available deterministic evidence is incomplete and does not establish a review outcome.';
+
+    return {
+      state,
+      reason,
+      needsAttention: state === 'NEEDS_REVIEW',
+      evidence: {
+        checks,
+        limitations: evidence.request.limitations,
+        excluded: evidence.excluded,
+        exclusionReasons: evidence.exclusionReasons,
+      },
     };
   }
 

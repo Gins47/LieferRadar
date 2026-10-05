@@ -29,6 +29,6 @@ import { LuebeckHamburgRouteService } from './route/luebeck-hamburg-route.servic
     PostgresDemoVehicleRepository,
     LuebeckHamburgRouteService,
   ],
-  exports: [DemoPreparationService],
+  exports: [DemoPreparationService, DemoService],
 })
 export class DemoModule {}

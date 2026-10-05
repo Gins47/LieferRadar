@@ -94,6 +94,27 @@ describe('DemoService', () => {
         elapsedSeconds === 0 ? startPosition : nearDisruptionPosition,
       ),
     };
+    const evidence = {
+      prepare: jest.fn().mockReturnValue({
+        request: {
+          checks: {
+            geographic: {
+              id: 'check-geographic',
+              state: 'NEAR_REMAINING_ROUTE',
+            },
+            direction: { id: 'check-direction', state: 'COMPATIBLE' },
+            routePosition: {
+              id: 'check-route-position',
+              state: 'AHEAD_OR_ALONGSIDE',
+            },
+            timing: { id: 'check-timing', state: 'POSSIBLE' },
+          },
+          limitations: [],
+        },
+        excluded: false,
+        exclusionReasons: [],
+      }),
+    };
 
     return {
       service: new DemoService(
@@ -101,10 +122,12 @@ describe('DemoService', () => {
         disruptions as never,
         vehicles as never,
         route as never,
+        evidence as never,
       ),
       disruptions,
       vehicles,
       route,
+      evidence,
     };
   }
 
@@ -125,11 +148,77 @@ describe('DemoService', () => {
         providerId: SELECTED_WARNING_PROVIDER_ID,
         ingestionMode: 'REPLAY',
       },
+      operatorReview: { state: 'WARNING_NOT_YET_OBSERVED' },
     });
     expect(disruptions.findByProviderIdentity).toHaveBeenCalledWith(
       SELECTED_WARNING_SOURCE,
       SELECTED_WARNING_PROVIDER_ID,
     );
+  });
+
+  it('keeps exclusions and incomplete evidence explicit after the warning is observable', () => {
+    const { service, evidence } = createService();
+    const shipment = {
+      id: DEMO_SHIPMENT_ID,
+      pickupLocation: { city: 'Lübeck' },
+      destination: { city: 'Hamburg' },
+    } as never;
+    const vehicle = vehicleState({
+      simulatedAt: new Date('2026-10-03T07:34:00.000Z'),
+    });
+
+    expect(
+      service.getOperatorReview(shipment, vehicle, warning() as never),
+    ).toMatchObject({
+      state: 'NEEDS_REVIEW',
+      needsAttention: true,
+    });
+
+    evidence.prepare.mockReturnValueOnce({
+      request: {
+        checks: {
+          geographic: { id: 'check-geographic', state: 'DISTANT' },
+          direction: { id: 'check-direction', state: 'COMPATIBLE' },
+          routePosition: {
+            id: 'check-route-position',
+            state: 'AHEAD_OR_ALONGSIDE',
+          },
+          timing: { id: 'check-timing', state: 'POSSIBLE' },
+        },
+        limitations: [],
+      },
+      excluded: true,
+      exclusionReasons: ['geographic'],
+    });
+    expect(
+      service.getOperatorReview(shipment, vehicle, warning() as never),
+    ).toMatchObject({
+      state: 'EXCLUDED',
+      needsAttention: false,
+    });
+
+    evidence.prepare.mockReturnValueOnce({
+      request: {
+        checks: {
+          geographic: { id: 'check-geographic', state: 'UNKNOWN' },
+          direction: { id: 'check-direction', state: 'COMPATIBLE' },
+          routePosition: {
+            id: 'check-route-position',
+            state: 'AHEAD_OR_ALONGSIDE',
+          },
+          timing: { id: 'check-timing', state: 'POSSIBLE' },
+        },
+        limitations: [],
+      },
+      excluded: false,
+      exclusionReasons: [],
+    });
+    expect(
+      service.getOperatorReview(shipment, vehicle, warning() as never),
+    ).toMatchObject({
+      state: 'INCOMPLETE_EVIDENCE',
+      needsAttention: false,
+    });
   });
 
   it('maps NEAR_DISRUPTION to the fixed validated route offset and atomically increments revision', async () => {
