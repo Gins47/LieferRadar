@@ -21,8 +21,9 @@ a warning-only official Autobahn collection path.
   presence and provenance.
 - Keep `POST /integrations/autobahn/collect` disabled unless
   `AUTOBANH_COLLECTION_ENABLED=true` in a non-production local process.
-- Replay the recorded A1 warnings only through the development command and a
-  separately configured local database named `lieferradar_demo_*`.
+- Replay the recorded A1 warnings only through the guarded development command
+  against the configured local LieferRadar database; exact REPLAY verification
+  keeps historical demo evidence distinct from any LIVE records.
 - Do not add a scheduler, automatic resolution or closure collection.
 
 Acceptance gate: deterministic provider/normalizer/service tests, isolated
@@ -32,7 +33,9 @@ the existing shipment regressions.
 **Implementation record, 2026-10-04:** passed 53 unit tests, 37 isolated
 PostgreSQL tests and 9 HTTP tests, plus TypeScript, production build, focused
 lint and `git diff --check`. A read-only A1 live probe returned one warning.
-The replay command correctly rejects a missing demo database URL. Subsequently,
+The replay command originally rejected a missing demo database URL. D15 was
+revised on 2026-10-05 to use the configured local LieferRadar database with
+the same explicit local/production safeguards. Subsequently,
 the user reported successful live collection/retrieval, LIVE provenance,
 repeated collection without duplicate rows and 404 when collection is disabled.
 These are user-performed manual checks; recorded fixture replay remains

@@ -1,7 +1,7 @@
 # Iteration 003 — AI Disruption Demonstration
 
 **Project:** LieferRadar<br>
-**Status:** B1–B2 accepted; B3.1–B3.2 complete; B3.3–B6 not started<br>
+**Status:** B1–B2 accepted; B3.1–B3.3 complete; B3.4–B6 not started<br>
 **Approval date:** 2026-10-04<br>
 **Dependencies:** Iterations 001 and 002; existing NestJS and Python services<br>
 **Budget:** Six development hours, including verification
@@ -62,7 +62,7 @@ Add one explicit migration for `demo_vehicle_state` and `demo_vehicle_shipments`
 
 Use practical checks, foreign keys and repository transactions. Persist only latest state. Example identifiers are `VEH-DEMO-002`, `Alex Demo`, `driver-shp002@example.invalid` and a fictional phone number; do not use real contact information. Exclude contact metadata from LLM inputs.
 
-An explicit demo preparation command reuses logistics fixture seeding and recorded-warning replay with the existing local `lieferradar_demo_*` database guard. Do not weaken development seed restrictions. Migrations and setup remain explicit; startup performs neither. Automated database tests use the isolated runner and cannot fall back to development.
+An explicit demo-preparation command reuses logistics fixture seeding, vehicle/assignment setup and recorded-warning replay against the configured local LieferRadar database. It is explicitly invoked only with `NODE_ENV=development`, and is unavailable in production, other environment modes or the isolated test context; startup performs neither migrations nor setup. The command preserves an existing demo vehicle's progress and revision on repeated runs. Historical `REPLAY` and current `LIVE` disruptions may coexist, but the reproducible scenario requires the exact selected `REPLAY` warning and fails if newer LIVE state prevents it. Automated database tests use the isolated runner and cannot fall back to development.
 
 ### Simulation and HTTP contracts
 
@@ -243,7 +243,7 @@ Use mocked calls for automated tests; verify FastAPI request/response behavior u
 
 **Tasks:** Persist one fictional vehicle/driver state; reject route-hash mismatches; add reset/advance/read validation and atomic revision protection. Maximum advance is 7,200 whole seconds. Advance at the destination validates `expectedRevision` and then performs a no-op. Bind local processes to loopback and guard demonstration mutations. Demo preparation must query the exact selected warning after replay and require `source: autobahn`, provider ID `INRIX--vi-avl.2026-10-03_06-53-00-000_003.de0` and `ingestionMode: REPLAY`; fail rather than use newer LIVE state.
 
-**Acceptance:** Same reset/advance sequence reproduces positions and timestamps after restart. Progress is bounded, duplicate/stale advancement cannot apply twice, and SHP-001/SHP-002 contracts and shipment status remain unchanged. Explicit setup can target only the eligible demo database. Isolated tests prove persistence and cleanup.
+**Acceptance:** Same reset/advance sequence reproduces positions and timestamps after restart. Progress is bounded, duplicate/stale advancement cannot apply twice, and SHP-001/SHP-002 contracts and shipment status remain unchanged. Explicit setup can target only the configured eligible local LieferRadar database. Isolated tests prove persistence and cleanup.
 
 **Verification commands** (repository root):
 
@@ -262,7 +262,7 @@ Also run `npx tsc --noEmit --incremental false` and focused `npx eslint "src/dem
 
 **Acceptance:** The SHP-002 historical scenario yields a validated result with source-backed evidence and uncertainty. Opposite-direction, behind-vehicle and conflicting-timing controls are excluded; insufficient data stays explicit. Database and Python errors propagate appropriately. New vehicle context can receive a new assessment without a warning-content change.
 
-**Verification commands:** Repeat API unit, isolated integration/HTTP, TypeScript and focused lint checks from B3; repeat B2 Python tests. For the explicit local smoke check (only after enabling demo controls and selecting the demo database):
+**Verification commands:** Repeat API unit, isolated integration/HTTP, TypeScript and focused lint checks from B3; repeat B2 Python tests. For the explicit local smoke check (only after enabling demo controls and preparing the configured local database):
 
 ```bash
 curl --fail-with-body http://127.0.0.1:3000/demo/shipments/SHP-002
@@ -309,7 +309,7 @@ From the repository root, run `git diff --check` and review `git diff` plus new 
 
 ## Constraints and deferrals
 
-- Operate on loopback with a separate eligible demo database; keep development untouched. Mutations are disabled by default and unavailable in production. Credentials stay server-side.
+- Operate on loopback with one configured eligible local LieferRadar database. Demo preparation and replay are explicit, guard local/development configuration and remain unavailable in production. Credentials stay server-side.
 - Authentication infrastructure is deferred, not approval for public exposure. Existing local guard requirements remain mandatory.
 - No automatic rerouting, cancellation, driver notifications or shipment-status changes. Recommendations require human review; recording approval/rejection is deferred and remains required for full MVP completion.
 - No runtime routing, route database/management, background workers, GPS, position history, warning history, automatic resolution or synchronization.
@@ -325,7 +325,8 @@ Update this checklist and table after each checkpoint. Record date, commands, ex
 - [x] B2 — Structured candidate explanation accepted; two non-blocking follow-ups recorded.
 - [x] B3.1 — Revised vehicle-state migration and repository verified.
 - [x] B3.2 — Deterministic route loading and fictional position calculation verified.
-- [ ] B3.3–B3.4 — Guarded preparation and local APIs verified.
+- [x] B3.3 — Guarded demo preparation verified.
+- [ ] B3.4 — Local demonstration APIs verified.
 - [ ] B4 — Real backend assessment and evaluation verified.
 - [ ] B5 — Frontend delivered or time-limit fallback explicitly recorded.
 - [ ] B6 — Final acceptance and diff review completed.
@@ -336,7 +337,8 @@ Update this checklist and table after each checkpoint. Record date, commands, ex
 | B2 | Accepted — 2026-10-04 | Mocked reasoning, route and schema checks passed; FastAPI OpenAPI and compilation checks passed. The live SHP-002 evaluation correctly preserved provider-delay, timing, replay, route and simulated-vehicle uncertainty. | Two non-blocking follow-ups are recorded below. NestJS current-state verification remains B4. |
 | B3.1 | Complete — 2026-10-04 | Vehicle state is keyed by vehicle and `demo_vehicle_shipments` records current shipment assignments. Isolated migration/repository tests cover table rollback/reapplication, state mapping, multi-shipment assignment and one-current-assignment enforcement. `npm --prefix services/api run test:integration` passed: 8 database suites / 43 tests and 1 HTTP suite / 9 tests; the container/network were removed. API unit tests (14 suites / 53 tests), TypeScript, focused lint, build and `git diff --check` passed. | Playback, preparation and HTTP operations remain later B3 work. |
 | B3.2 | Complete — 2026-10-04 | The injectable route service validates the immutable GeoJSON hash, LineString, WGS84 coordinates and provenance. Unit tests cover boundaries, Haversine distance progression, repeated coordinates, invalid elapsed seconds, deterministic results, invalid geometry and hash mismatch. Focused route tests passed (10 tests); API unit tests passed (15 suites / 63 tests); TypeScript, focused lint and build passed. | Geometry is later-captured passenger-car demonstration data, not historical vehicle tracking or HGV route evidence. |
-| B3.3–B3.4 | Not started | No checkpoint tests run | Guarded preparation and local APIs |
+| B3.3 | Complete — 2026-10-05 | Corrected architecture: `prepare:ai-disruption-demo` uses the configured local `DATABASE_URL`, never a second demo URL/database. It remains explicit (`--demo`), local/development-only and unavailable in production or the integration-test context. It seeds logistics fixtures, preserves any existing approved vehicle progress/revision, replays the recorded A1 fixture, then queries `autobahn` / `INRIX--vi-avl.2026-10-03_06-53-00-000_003.de0` and requires `REPLAY`; newer LIVE state is a visible failure. Focused guard/preparation tests passed (10 tests); full API unit tests passed (17 suites / 73 tests); isolated integration and HTTP verification passed (9 database suites / 44 tests; 1 HTTP suite / 9 tests) and removed its container/network. TypeScript, focused lint, build and `git diff --check` passed. Checkpoint-review correction: the shared guard now requires `NODE_ENV=development` and rejects `test`, `production`, unset and other environment modes; 15 focused guard/preparation tests, TypeScript, focused lint and `git diff --check` passed. | Run local migrations before preparation. B3.4 local read/reset/advance APIs remain unstarted. |
+| B3.4 | Not started | No checkpoint tests run | Local demonstration APIs |
 | B4 | Not started | No real LLM assessment or evaluation run | Key/quota/model access and end-to-end integration |
 | B5 | Not started; optional | No frontend checks run | 45-minute target / 60-minute maximum; retain fallback |
 | B6 | Not started | No final acceptance checks run | Await required checkpoints; document incomplete work honestly |

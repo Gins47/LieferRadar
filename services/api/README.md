@@ -54,16 +54,28 @@ demonstration only, set `AUTOBANH_COLLECTION_ENABLED=true` before starting the
 API, then call `POST /integrations/autobahn/collect` with an optional
 `{ "road": "A1" }` body. It remains unavailable when `NODE_ENV=production`.
 
-To replay the recorded A1 warning fixture, configure
-`LIEFERRADAR_DEMO_DATABASE_URL` with a local PostgreSQL database whose name
-starts with `lieferradar_demo_`, apply the existing migrations to that database,
-then run:
+To replay the recorded A1 warning fixture into the same configured local
+LieferRadar database, apply migrations and seed logistics fixtures first, then
+run:
 
 ```bash
 npm run replay:autobahn:a1:demo
 ```
 
-The replay command rejects the development database and never runs at startup.
+The replay command requires the local development `DATABASE_URL`, rejects
+production and integration-test contexts, and never runs at startup.
+
+To prepare Iteration 003 demo data in that same database, run the guarded
+command below. It seeds the existing logistics fixtures, creates the fictional
+SHP-002 vehicle assignment without resetting existing simulation progress,
+replays the recorded A1 fixture, and verifies the exact selected warning remains
+`REPLAY` (rather than newer `LIVE` state). Historical `REPLAY` evidence and
+current `LIVE` disruptions may coexist; the demo always requires the exact
+historical record.
+
+```bash
+npm run prepare:ai-disruption-demo
+```
 
 ```bash
 # development

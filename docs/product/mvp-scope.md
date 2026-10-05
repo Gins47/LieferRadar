@@ -150,7 +150,7 @@ synchronization, dynamic routing and public mutation access remain deferred.
 | D12 | Use three outcome-based iterations for the interview-ready MVP | Protects the verified persistence foundation while focusing delivery on a repeatable demonstration | Approved 2026-10-04; remaining B/C delivery sequence revised by D16 |
 | D13 | Iteration A collects official warnings first; closure collection is deferred unless separately approved | Prioritizes the primary A1 demonstration without delaying safe warning ingestion | Approved 2026-10-04 |
 | D14 | Mutation endpoints are disabled by default, local-demo-only, and unavailable in production | Avoids public state-changing operations before an authentication design is approved | Approved 2026-10-04 |
-| D15 | Use a separate local demo database and historical simulation clock for recorded A1 evidence | Prevents replay from altering development data or being presented as live information | Approved 2026-10-04 |
+| D15 | Use one configured local LieferRadar database with explicit guarded demo preparation and a historical simulation clock for recorded A1 evidence | Keeps the MVP in one running system while preserving local-only/prod guards, exact REPLAY verification and clear separation of historical evidence from LIVE state | Revised by explicit approval 2026-10-05 |
 | D16 | Combine essential B/C work into six-hour Iteration 003, checkpoints B1–B6; prioritize one real AI assessment | Produces a complete evidence-to-reasoning flow within the available budget | Approved 2026-10-04; B1–B2 complete, B3–B6 pending |
 | D17 | Use the supplied passenger-car ORS route as immutable file-backed demo geometry; no route table or runtime routing | Reuses available geometry while disclosing subsequent capture and unverified HGV suitability | Approved 2026-10-04 for simulation; B1 verification complete |
 | D18 | Persist one fictional vehicle/driver state keyed by vehicle, with current shipment assignments, deterministic historical playback and atomic revision checks | Supports one vehicle carrying several shipments without fleet management or position/assignment history | Approved 2026-10-04; B3.1 persistence verified, playback/API work pending |
@@ -210,6 +210,7 @@ For every proposed material change:
 | 2026-10-04 | 1.5 | Recorded D24: NestJS candidate selection, Python rejection of definite exclusions, and German candidate explanations | Explicit user approval; B2 revision |
 | 2026-10-04 | 1.6 | Revised D24: English candidate explanations | Explicit user approval |
 | 2026-10-04 | 1.7 | Revised D18: vehicle state is keyed by vehicle and linked through a current shipment-assignment table | Explicit user approval |
+| 2026-10-05 | 1.8 | Revised D15: use the configured local LieferRadar database for guarded demo preparation; historical REPLAY and LIVE records may coexist, and the exact REPLAY record remains mandatory | Explicit user approval |
 
 ## 10. Definition of MVP done
 

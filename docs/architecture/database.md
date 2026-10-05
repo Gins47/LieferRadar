@@ -73,8 +73,11 @@ persistence semantics: the integration validates and normalizes provider
 records before using the existing repository upsert. `GET /disruptions` and
 `GET /disruptions/:id` read only from PostgreSQL. The local-demo collection
 route is disabled unless explicitly enabled and is always unavailable in
-production. The warning fixture replay command requires a separate local
-`lieferradar_demo_*` database, so it cannot use the development database.
+production. The warning fixture replay and demo-preparation commands use the
+configured local development database only, with explicit invocation and
+local/production guards. Historical `REPLAY` records and current `LIVE` records
+may coexist; demo preparation verifies the exact recorded warning rather than
+substituting LIVE state.
 Collection does not schedule background work or infer resolution; closure
 support remains deferred. Python migrations remain independent, and this
 decision adds no PostGIS, tracking, AI or frontend work.

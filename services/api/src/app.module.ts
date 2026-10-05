@@ -3,6 +3,7 @@ import { AppController } from './app.controller';
 import { AppService } from './app.service';
 import { DisruptionModule } from './disruption/disruption.module';
 import { AutobahnModule } from './integrations/autobahn/autobahn.module';
+import { DemoModule } from './demo/demo.module';
 import { ProductModule } from './product/product.module';
 import { ShipmentModule } from './shipment/shipment.module';
 import { SupplierModule } from './supplier/supplier.module';
@@ -14,6 +15,7 @@ import { SupplierModule } from './supplier/supplier.module';
     ShipmentModule,
     DisruptionModule,
     AutobahnModule,
+    DemoModule,
   ],
   controllers: [AppController],
   providers: [AppService],
