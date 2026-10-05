@@ -17,7 +17,7 @@ async function bootstrap() {
 
   try {
     await app.get(DatabaseService).verifyConnection();
-    await app.listen(process.env.PORT ?? 3000);
+    await app.listen(process.env.PORT ?? 3000, '127.0.0.1');
   } catch (error) {
     await app.close();
     throw error;

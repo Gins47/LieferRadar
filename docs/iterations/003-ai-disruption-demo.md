@@ -1,12 +1,18 @@
 # Iteration 003 — AI Disruption Demonstration
 
 **Project:** LieferRadar<br>
-**Status:** B1–B2 accepted; B3.1–B3.3 complete; B3.4–B6 not started<br>
+**Status:** B1–B2 accepted; B3.1–B3.4 complete; B4–B6 not started<br>
 **Approval date:** 2026-10-04<br>
 **Dependencies:** Iterations 001 and 002; existing NestJS and Python services<br>
-**Budget:** Six development hours, including verification
+**Budget:** Original six-hour allocation; approved remaining scope: 120–180 minutes including verification
 
 Authority: [MVP scope and decision register](../product/mvp-scope.md), decisions D16–D24. See [Accelerated delivery](../product/accelerated-delivery.md) and [Database architecture](../architecture/database.md). This specification combines the essential route/simulation and AI work from the earlier Iterations B and C.
+
+### Reduced remaining scope — approved 2026-10-05
+
+The user approved a smaller B3.4–B6 delivery focused on disruption assessment. B1, B2 and B3.1–B3.3 remain complete; preserve their code, tests and verification records. Replace the remaining sequential playback/API work with two backend-owned manual positioning states, protect B4's deterministic evidence and real Python call, and deliver one simple operator page with an optional map.
+
+The MVP decision register aligns D16's remaining budget, D18's named-position scope and D19's frontend/time-limit wording. Existing NestJS/Python ownership, exact REPLAY selection, revision/hash consistency and human-review safeguards remain mandatory. Iteration 003 remains an assessment demonstration: recording approval/rejection is still deferred, so delivery must not be reported as completion of the broader MVP definition.
 
 ### Implementation clarifications approved before B1
 
@@ -27,7 +33,7 @@ Saved route → simulated vehicle → authentic historical warning
 
 Use `SHP-002` (Lübeck → Hamburg, A1), one recorded warning, one fictional vehicle/driver and the existing PostgreSQL and FastAPI foundations. Preserve existing shipment HTTP responses, fixtures and disruption persistence semantics.
 
-The mandatory outcome is a working backend assessment flow. A Next.js map is optional and strictly time-limited. A documented HTTP/JSON demonstration is an acceptable frontend fallback. Completing this iteration does not complete the full MVP: recording human approval/rejection remains deferred.
+The target outcome is a working backend assessment flow and one operator page for SHP-002. A map is optional: prefer a simple route/location visual or text view if mapping threatens the budget. A documented HTTP/JSON demonstration remains a transparent fallback if the page cannot be delivered; record that UI delivery is incomplete. Completing this iteration does not complete the full MVP: recording human approval/rejection remains deferred.
 
 ## Architecture
 
@@ -39,7 +45,7 @@ The mandatory outcome is a working backend assessment flow. A Next.js map is opt
 | Python `api/routes/disruption.py` | Thin asynchronous `POST /analysis/disruption` route with Pydantic request and response models |
 | Python `reasoning/disruption.py` | Evidence handling, bounded structured LLM invocation and output validation |
 | Python `llm/clients.py`, `prompts/disruption_assessment.py` | Reuse installed `langchain-openai`; keep client configuration and prompts at existing service boundaries |
-| Optional `services/web` | One Next.js page with React Leaflet, vehicle controls and assessment output; allowlisted server forwarding to NestJS |
+| `services/web` (planned) | One SHP-002 operator page, named vehicle positioning and assessment output; allowlisted server forwarding to NestJS; map optional |
 
 NestJS remains the source of supply-chain facts and deterministic checks. Python returns reasoning and human-review recommendations; it never writes supply-chain state. No RAG or Python database migration is required for assessment. Retain existing embedding/ingestion functionality and avoid legacy ticket dependencies.
 
@@ -64,19 +70,93 @@ Use practical checks, foreign keys and repository transactions. Persist only lat
 
 An explicit demo-preparation command reuses logistics fixture seeding, vehicle/assignment setup and recorded-warning replay against the configured local LieferRadar database. It is explicitly invoked only with `NODE_ENV=development`, and is unavailable in production, other environment modes or the isolated test context; startup performs neither migrations nor setup. The command preserves an existing demo vehicle's progress and revision on repeated runs. Historical `REPLAY` and current `LIVE` disruptions may coexist, but the reproducible scenario requires the exact selected `REPLAY` warning and fails if newer LIVE state prevents it. Automated database tests use the isolated runner and cannot fall back to development.
 
-### Simulation and HTTP contracts
+### Manual demonstration positioning and HTTP contracts
 
-Reset to the first route coordinate and `2026-10-03T06:30:00.000Z`. Advance by bounded whole-number seconds, defaulting to ten simulated minutes. Apply elapsed progress proportionally to the existing two-hour shipment window ending `2026-10-03T08:30:00.000Z`; interpolate by route distance and clamp at the destination. This is synthetic playback, not an ORS ETA or traffic model. Never modify shipment status automatically.
+Use `START` and `NEAR_DISRUPTION` only. NestJS maps each name to a fixed position validated on the immutable saved route; the browser never supplies authoritative coordinates, elapsed seconds or timestamps. Reuse the existing route interpolation and persisted state without expanding playback. `START` uses elapsed seconds 0 and `2026-10-03T06:30:00.000Z`. `NEAR_DISRUPTION` is the fixed 3,840-second offset: `2026-10-03T07:34:00.000Z` at `[10.326863322601533, 53.701048700082]`. The uniform interpolation is approximately 36.40 km along the 68,242.2 m artifact distance, before the B1-measured 36.54 km warning-section start and after the `07:00Z` replay capture. This is fictional positioning, not measured GPS, an ORS ETA or a traffic model; it is not a B4 geographic candidate calculation. Preserve the two-hour shipment schedule and status.
 
 | Endpoint | Input and result |
 | -------- | ---------------- |
 | `GET /demo/shipments/:id` | SHP-002 view, route/provenance, fictional vehicle/driver, latest simulation state and selected warning |
-| `POST /demo/shipments/:id/reset` | `{ expectedRevision }` → updated simulation state |
-| `POST /demo/shipments/:id/advance` | `{ seconds, expectedRevision }` → updated simulation state |
-| `POST /demo/shipments/:id/assessment` | `{ disruptionId, expectedRevision }` → versioned structured assessment |
+| `POST /demo/shipments/:id/vehicle-position` | `{ position: 'START' \| 'NEAR_DISRUPTION', expectedRevision }` → persisted fictional state |
+| `POST /demo/shipments/:id/assessment` | `{ expectedRevision }` → deterministic evidence with exclusion or versioned structured assessment; backend selects the exact REPLAY warning |
 | Python `POST /analysis/disruption` | Bounded authoritative evidence → validated assessment |
 
-Support SHP-002 only in this demonstration. Use atomic revision checks: a stale reset/advance request returns `409` and cannot apply twice. NestJS reads shipment, warning and vehicle facts itself; browser-supplied identifiers are not evidence. Existing `/shipments/:id` and `/disruptions` contracts remain unchanged. HTTP disruption filtering uses `road=A1`, mapped internally to `queriedRoad`.
+Support SHP-002 only in this demonstration. Named positioning uses an atomic `expectedRevision` check and increments revision on an accepted write; stale requests return `409` without applying. Do not add special destination or playback no-op semantics. NestJS reads shipment, exact warning and vehicle facts itself. Unprepared state or incompatible route hash returns `409`; unavailable exact REPLAY evidence fails visibly. Positioning/assessment controls require explicit local development enablement, remain disabled by default and unavailable in production, and processes bind to loopback. Existing `/shipments/:id` and `/disruptions` contracts remain unchanged. HTTP disruption filtering uses `road=A1`, mapped internally to `queriedRoad`.
+
+### B3.4 local demonstration walkthrough
+
+This walkthrough demonstrates the completed persisted vehicle, route and historical-warning portion of Iteration 003. B4 has not started: `POST /demo/shipments/SHP-002/assessment` is not available yet, and no disruption-impact conclusion should be drawn from positioning alone.
+
+1. Start the local PostgreSQL service from the repository root, if it is not already running:
+
+   ```bash
+   docker compose up -d postgres
+   ```
+
+2. In `services/api`, configure the guarded local database in `.env`. The command requires exactly `NODE_ENV=development`, a local host/port and the `lieferrader_db` database name:
+
+   ```env
+   DATABASE_URL=postgresql://app:app_password_123@127.0.0.1:5432/lieferrader_db
+   NODE_ENV=development
+   ```
+
+   Do not point these commands at a production or integration-test database.
+
+3. Apply migrations and explicitly prepare the scenario. Preparation seeds the fixtures, preserves an existing approved vehicle's position/revision, replays the recorded warning and refuses a newer `LIVE` version of the selected warning:
+
+   ```bash
+   npm run migrate:up:local
+   npm run prepare:ai-disruption-demo
+   ```
+
+   Successful preparation prints `VEH-DEMO-002`, the selected Autobahn provider ID and `"warningIngestionMode":"REPLAY"`. If it reports newer `LIVE` state, stop: that protection intentionally prevents historical replay from being presented as current evidence.
+
+4. Start the API with the mutation control explicitly enabled. It listens on loopback:
+
+   ```bash
+   NODE_ENV=development LIEFERRADAR_DEMO_CONTROLS_ENABLED=true npm run start:dev
+   ```
+
+5. In a second terminal, read the prepared scenario:
+
+   ```bash
+   curl --fail-with-body http://127.0.0.1:3000/demo/shipments/SHP-002
+   ```
+
+   Verify `shipment.status` remains `PLANNED`; `vehicle.revision` is present; the route has its SHA-256/provenance; and `warning.source`, `warning.providerId` and `warning.ingestionMode` are respectively `autobahn`, `INRIX--vi-avl.2026-10-03_06-53-00-000_003.de0` and `REPLAY`.
+
+6. Copy the returned `vehicle.revision` and use it as `expectedRevision` to choose the fixed near-disruption state. For a freshly prepared vehicle that revision is normally `0`:
+
+   ```bash
+   curl --fail-with-body \
+     -X POST http://127.0.0.1:3000/demo/shipments/SHP-002/vehicle-position \
+     -H 'content-type: application/json' \
+     -d '{"position":"NEAR_DISRUPTION","expectedRevision":0}'
+   ```
+
+   The accepted response has `elapsedSeconds: 3840`, `simulatedAt: "2026-10-03T07:34:00.000Z"` and an incremented revision. Use the returned revision for every following mutation.
+
+7. Re-read the GET endpoint to confirm the latest position persists. Submit the old revision again to observe the expected `409 Conflict`; it must not change the stored state:
+
+   ```bash
+   curl -i \
+     -X POST http://127.0.0.1:3000/demo/shipments/SHP-002/vehicle-position \
+     -H 'content-type: application/json' \
+     -d '{"position":"START","expectedRevision":0}'
+   ```
+
+8. To rerun the positioning demonstration, first GET the scenario and use its current revision to select `START`:
+
+   ```bash
+   curl --fail-with-body \
+     -X POST http://127.0.0.1:3000/demo/shipments/SHP-002/vehicle-position \
+     -H 'content-type: application/json' \
+     -d '{"position":"START","expectedRevision":<current-revision>}'
+   ```
+
+   `START` restores the initial route coordinate and `2026-10-03T06:30:00.000Z`, then increments revision. It does not reset the revision counter. Stop and restart the API, then GET the scenario again to confirm that this latest state remains persisted.
+
+9. Stop the API and restart it without `LIEFERRADAR_DEMO_CONTROLS_ENABLED=true`; the position POST returns `404`. `NODE_ENV=production` also returns `404` even if that flag is supplied. The GET endpoint remains read-only.
 
 ## Data provenance and route evidence
 
@@ -187,7 +267,7 @@ Timeout, provider failure or invalid output returns an explicit assessment-unava
 
 ## Checkpoints and verification
 
-Commands below are planned acceptance commands. New files, scripts and the web package do not exist yet. Existing database/HTTP checks must run through `test:integration`, never direct database-backed Jest execution against development. Time spent testing and documenting belongs within each checkpoint budget; B6 is the final consolidated review.
+Commands below are planned acceptance commands for remaining work; completed checkpoint evidence is retained separately. Existing database/HTTP checks must run through `test:integration`, never direct database-backed Jest execution against development. Time spent testing and documenting belongs within each checkpoint budget; B6 is the final consolidated review.
 
 | Checkpoint | Budget | Dependencies | Deliverable |
 | ---------- | ------ | ------------ | ----------- |
@@ -198,7 +278,16 @@ Commands below are planned acceptance commands. New files, scripts and the web p
 | B5 | 45 min target; 60 min hard maximum | B3/B4 APIs | Optional Next.js map and assessment controls |
 | B6 | 30 min | B1–B4; B5 delivered or time-limit fallback | Final regression/evaluation record and walkthrough |
 
-Target 345 minutes plus 15 minutes contingency. Protect the combined 150-minute B2/B4 AI allocation. If earlier work overruns, cut frontend work first; do not silently defer vehicle persistence or factual safeguards.
+The table above records the original allocation. The approved remaining sequence supersedes its remaining B3/B4/B5/B6 budgets:
+
+| Remaining checkpoint | Estimate including focused verification | Deliverable |
+| -------------------- | --------------------------------------- | ----------- |
+| B3.4 | 25–35 min | Stored SHP-002 view and revision-protected START/NEAR_DISRUPTION positioning |
+| B4 | 60–85 min | All four deterministic checks, exclusion bypass, validated Python client/API and one real end-to-end assessment |
+| B5 | 20–30 min | One operator page; optional map only within this allowance |
+| B6 | 15–30 min | Consolidated regression evidence, persisted restart and operator walkthrough |
+
+Total: 120–180 minutes. Protect B4 and the final correctness gates; cut map work first. Credential/quota failures or unexpected integration defects may exceed the estimate and must be reported rather than bypassed.
 
 ### B1 — Route verification and integration preparation
 
@@ -239,11 +328,11 @@ Use mocked calls for automated tests; verify FastAPI request/response behavior u
 1. **B3.1 — persistence foundation:** Add `demo_vehicle_state` keyed by vehicle and `demo_vehicle_shipments` for current assignments, a minimal typed PostgreSQL repository and focused isolated migration/repository tests. One vehicle can carry multiple shipments; one shipment has at most one assignment. Adapt earlier migration rollback tests so each restores the schema in `finally`.
 2. **B3.2 — deterministic route playback:** Load and validate the immutable route artifact, calculate a fictional uniform position from elapsed simulated seconds, and retain its SHA-256. The progress model is demonstration data only and must never be described as recorded vehicle movement.
 3. **B3.3 — explicit preparation:** Seed the fictional `SHP-002` vehicle only through a guarded demo-preparation flow. It must load the exact historical `REPLAY` warning with `source: autobahn` and provider ID `INRIX--vi-avl.2026-10-03_06-53-00-000_003.de0`; absence or newer LIVE state is an explicit failure, never a substitution.
-4. **B3.4 — local demonstration API:** Add stored-state, reset and advance operations for SHP-002 only. The GET response contains stored state, route geometry and the selected historical warning; disruption relevance calculations remain B4. Unprepared state returns `409`.
+4. **B3.4 — manual demonstration positioning:** Add stored-state GET and one named-position mutation for SHP-002 only. Reuse the existing row, assignment and validated route; no migration is planned. GET includes shipment summary, vehicle state/revision, route geometry/provenance and the exact historical REPLAY warning. Define and verify START/NEAR_DISRUPTION mappings. Disruption relevance calculations remain B4. Unprepared state returns `409`.
 
-**Tasks:** Persist one fictional vehicle/driver state; reject route-hash mismatches; add reset/advance/read validation and atomic revision protection. Maximum advance is 7,200 whole seconds. Advance at the destination validates `expectedRevision` and then performs a no-op. Bind local processes to loopback and guard demonstration mutations. Demo preparation must query the exact selected warning after replay and require `source: autobahn`, provider ID `INRIX--vi-avl.2026-10-03_06-53-00-000_003.de0` and `ingestionMode: REPLAY`; fail rather than use newer LIVE state.
+**Remaining tasks:** Add a thin controller, validated enum/revision DTO and minimal service/repository update. Persist position, elapsed offset, consistent historical timestamp and incremented revision atomically. Reject route-hash mismatches, invalid states, arbitrary coordinate input and stale writes. Bind local processes to loopback and guard mutations. Preserve B3.3 preparation and its exact REPLAY identity requirement; do not invoke setup at startup or reset existing progress through preparation.
 
-**Acceptance:** Same reset/advance sequence reproduces positions and timestamps after restart. Progress is bounded, duplicate/stale advancement cannot apply twice, and SHP-001/SHP-002 contracts and shipment status remain unchanged. Explicit setup can target only the configured eligible local LieferRadar database. Isolated tests prove persistence and cleanup.
+**Acceptance:** Each named state deterministically yields a validated saved-route position and timestamp; accepted state persists after restart. Stale revision writes fail without mutation. Preparation preserves previously stored state. SHP-001/SHP-002 contracts and shipment status remain unchanged. Explicit setup targets only the configured eligible local database. Focused unit/isolated HTTP tests cover valid/invalid named inputs, unsupported shipment, route mismatch, unprepared state, persistence, stale writes and disabled/production guards.
 
 **Verification commands** (repository root):
 
@@ -254,11 +343,11 @@ npm --prefix services/api run build
 git diff --check
 ```
 
-Also run `npx tsc --noEmit --incremental false` and focused `npx eslint "src/demo/**/*.ts"` from `services/api`. Demo preparation and local migration commands must be documented with an explicitly validated demo target; do not run development migrations/seeds as a substitute.
+Also run `npx tsc --noEmit --incremental false` and focused `npx eslint "src/demo/**/*.ts"` from `services/api`. Document explicit local migration/preparation commands and named-position requests. Database/HTTP tests must use the isolated runner.
 
 ### B4 — Complete backend assessment
 
-**Tasks:** Prepare deterministic remaining-route, direction, timing and provenance evidence; exclude definite non-candidates without calling Python; add AI client and validated assessment API for uncertain candidates; log bounded-call outcomes. Compare retained assessment context with the current vehicle revision and warning content hash before returning a result. Perform one real NestJS → FastAPI → LLM assessment. Add a separate explicit-live evaluation script for the three cases; do not make live calls part of normal tests.
+**Tasks:** After NEAR_DISRUPTION positioning, read authoritative shipment, vehicle and exact REPLAY warning facts. Prepare geographic proximity to the remaining route, ahead/behind section position, explicit direction compatibility, timing compatibility and provenance/limitations using the existing version 1 contract. Keep the experimental 25 m warning-to-route tolerance; a vehicle-to-warning distance alone is never a candidate rule. Definite exclusions skip Python; uncertain evidence remains eligible. Add a bounded validated HTTP client and minimal assessment endpoint that returns deterministic evidence alongside either an exclusion or an AI result. Compare retained vehicle revision and warning content hash with current state before returning. Log bounded-call outcomes without contact information/secrets. Perform one real NestJS → FastAPI → LLM assessment; retain automated mocked negative controls. Broader multi-case live evaluation is deferred; existing Python evaluation tooling may support diagnosis without becoming another required feature.
 
 **Acceptance:** The SHP-002 historical scenario yields a validated result with source-backed evidence and uncertainty. Opposite-direction, behind-vehicle and conflicting-timing controls are excluded; insufficient data stays explicit. Database and Python errors propagate appropriately. New vehicle context can receive a new assessment without a warning-content change.
 
@@ -268,19 +357,15 @@ Also run `npx tsc --noEmit --incremental false` and focused `npx eslint "src/dem
 curl --fail-with-body http://127.0.0.1:3000/demo/shipments/SHP-002
 ```
 
-Use its current revision/disruption ID in documented POST reset/advance/assessment requests. Run the planned live evaluation from `services/ai-service`:
-
-```bash
-uv run --locked python scripts/evaluate_disruption.py --live
-```
+Use its current revision in documented vehicle-position (`NEAR_DISRUPTION`) and assessment requests. The backend selects the exact historical warning. Execute one real assessment through NestJS and FastAPI, not solely a direct Python call. Automated checks cover distant geometry, opposite direction, wholly behind vehicle, conflicting timing, incomplete evidence, timeout/invalid AI output and changes to vehicle revision or warning content during assessment.
 
 Record actual model, timing and case outcomes. A valid schema alone is not evidence of factual correctness. Invalid credentials/quota/model access blocks the real-AI acceptance gate; a mocked result is not an equivalent success.
 
-### B5 — Optional map prototype
+### B5 — One operator page; optional map
 
-**Tasks:** One Next.js page, client-only React Leaflet map, OSM tiles/attribution, route/vehicle/warning layers, reset/advance/assess controls, historical clock and assessment text. Server-only backend configuration; allowlisted forwarding. No dashboard, elaborate styling or synchronization feature expansion.
+**Tasks:** One SHP-002 operator page showing shipment summary, fictional vehicle/location, saved route, exact historical warning, START/NEAR_DISRUPTION controls and assessment action. Display AI operator message, deterministic checks, missing evidence/uncertainty and recommended actions requiring human review, with clear simulation/REPLAY provenance. Keep server-only backend configuration and allowlisted forwarding. Use a simple visual/text route representation first; add React Leaflet/OSM only if achievable within 20–30 minutes, with attribution and tile-failure tolerance. No dashboard/general shipment management.
 
-**Acceptance:** A reviewer can see the scenario and request/display assessment with honest loading/error/provenance states. Bind web to loopback. Stop after 60 minutes even if incomplete and document the HTTP/JSON fallback. Tile failure must not prevent assessment output; no tile prefetch/offline cache infrastructure.
+**Acceptance:** A reviewer places the vehicle near the disruption and requests/displays a validated assessment with honest loading/error/exclusion/provenance states. Bind web to loopback. Stop map work when it threatens the allowance and complete the simple page; if the page remains incomplete, document the HTTP/JSON fallback and incomplete UI condition. A stale revision prompts refresh; vehicle changes clear the displayed assessment. No operational action is executed.
 
 **Verification commands** (planned web scripts, repository root):
 
@@ -290,11 +375,11 @@ npm --prefix services/web run lint
 npm --prefix services/web run build
 ```
 
-Manually verify reset, advance, assess and error display. Avoid introducing a browser-test framework for this time-limited prototype.
+Manually verify START/NEAR_DISRUPTION positioning, assessment, exclusion/error display and provenance. Avoid introducing a browser-test framework for this time-limited page.
 
 ### B6 — Final acceptance and review
 
-**Tasks:** Run complete regression checks, review SQL/input/output validation and diff, demonstrate persisted restart and one real assessment, document model/route/timing limitations and frontend disposition. Update all checkpoint results and MVP progress without expanding scope.
+**Tasks:** Prove saved route → persisted fictional vehicle → exact historical REPLAY warning → deterministic NestJS evidence → real Python AI call → validated operator result → simple page if delivered. Demonstrate persisted state after restart and review input/output validation, local guards and focused diff. Record actual model/duration, provenance limitations, failures and UI disposition. Reuse unchanged checkpoint verification results from the current implementation session; rerun consolidated checks once when needed, not a new broad evaluation project.
 
 **Verification commands:** API unit, isolated integration/HTTP and build commands from B3; Python tests/import check from B2; web checks from B5 if delivered. From `services/api`, run:
 
@@ -305,9 +390,11 @@ npx eslint "{src,apps,libs,test}/**/*.ts"
 
 From the repository root, run `git diff --check` and review `git diff` plus new files. Keep lint non-mutating; distinguish the previously reported unused `metadata` finding from new regressions. Run `test:integration:cleanup` only if the runner/teardown changes. Verify disabled/production mutation 404 behavior and existing shipment HTTP regressions within the isolated suite.
 
-**Acceptance:** Saved route → persisted fictional vehicle → authentic historical warning → deterministic evidence → real Python AI call → validated human-review result is demonstrated. Original warning content and shipment APIs remain intact. Every required check has an actual result; blocked checks are not passes. Stop for review; no commit/push or later checkpoint authorization is implied.
+**Acceptance:** The exact historical scenario is demonstrated through the API and operator page if delivered, including persisted restart and real AI result. Original warning content and shipment APIs remain intact. Every required check has an actual result; blocked checks are not passes. LIVE ingestion/current disruption APIs remain independently demonstrable and are not an AI-flow dependency. Stop for review; no commit/push or later checkpoint authorization is implied.
 
 ## Constraints and deferrals
+
+**Newly deferred from remaining mandatory delivery:** sequential advance-by-seconds/reset APIs and controls; repeated full-route progression; destination no-op product behavior; timers/background movement; realistic GPS, speed/heading and tracking behavior; position/assignment history and fleet features; required interactive map/layers; multi-case real-LLM evaluation expansion. Existing B3.1/B3.2 persistence, interpolation and tests stay intact. One real end-to-end AI assessment, all four deterministic checks and automated exclusion/uncertainty controls remain required.
 
 - Operate on loopback with one configured eligible local LieferRadar database. Demo preparation and replay are explicit, guard local/development configuration and remain unavailable in production. Credentials stay server-side.
 - Authentication infrastructure is deferred, not approval for public exposure. Existing local guard requirements remain mandatory.
@@ -326,7 +413,7 @@ Update this checklist and table after each checkpoint. Record date, commands, ex
 - [x] B3.1 — Revised vehicle-state migration and repository verified.
 - [x] B3.2 — Deterministic route loading and fictional position calculation verified.
 - [x] B3.3 — Guarded demo preparation verified.
-- [ ] B3.4 — Local demonstration APIs verified.
+- [x] B3.4 — Manual demonstration positioning verified.
 - [ ] B4 — Real backend assessment and evaluation verified.
 - [ ] B5 — Frontend delivered or time-limit fallback explicitly recorded.
 - [ ] B6 — Final acceptance and diff review completed.
@@ -338,9 +425,9 @@ Update this checklist and table after each checkpoint. Record date, commands, ex
 | B3.1 | Complete — 2026-10-04 | Vehicle state is keyed by vehicle and `demo_vehicle_shipments` records current shipment assignments. Isolated migration/repository tests cover table rollback/reapplication, state mapping, multi-shipment assignment and one-current-assignment enforcement. `npm --prefix services/api run test:integration` passed: 8 database suites / 43 tests and 1 HTTP suite / 9 tests; the container/network were removed. API unit tests (14 suites / 53 tests), TypeScript, focused lint, build and `git diff --check` passed. | Playback, preparation and HTTP operations remain later B3 work. |
 | B3.2 | Complete — 2026-10-04 | The injectable route service validates the immutable GeoJSON hash, LineString, WGS84 coordinates and provenance. Unit tests cover boundaries, Haversine distance progression, repeated coordinates, invalid elapsed seconds, deterministic results, invalid geometry and hash mismatch. Focused route tests passed (10 tests); API unit tests passed (15 suites / 63 tests); TypeScript, focused lint and build passed. | Geometry is later-captured passenger-car demonstration data, not historical vehicle tracking or HGV route evidence. |
 | B3.3 | Complete — 2026-10-05 | Corrected architecture: `prepare:ai-disruption-demo` uses the configured local `DATABASE_URL`, never a second demo URL/database. It remains explicit (`--demo`), local/development-only and unavailable in production or the integration-test context. It seeds logistics fixtures, preserves any existing approved vehicle progress/revision, replays the recorded A1 fixture, then queries `autobahn` / `INRIX--vi-avl.2026-10-03_06-53-00-000_003.de0` and requires `REPLAY`; newer LIVE state is a visible failure. Focused guard/preparation tests passed (10 tests); full API unit tests passed (17 suites / 73 tests); isolated integration and HTTP verification passed (9 database suites / 44 tests; 1 HTTP suite / 9 tests) and removed its container/network. TypeScript, focused lint, build and `git diff --check` passed. Checkpoint-review correction: the shared guard now requires `NODE_ENV=development` and rejects `test`, `production`, unset and other environment modes; 15 focused guard/preparation tests, TypeScript, focused lint and `git diff --check` passed. | Run local migrations before preparation. B3.4 local read/reset/advance APIs remain unstarted. |
-| B3.4 | Not started | No checkpoint tests run | Local demonstration APIs |
+| B3.4 | Complete — 2026-10-05 | `GET /demo/shipments/SHP-002` returns the prepared shipment, fictional vehicle/driver, state/revision, immutable route/provenance and only the exact `autobahn` / `INRIX--vi-avl.2026-10-03_06-53-00-000_003.de0` `REPLAY` warning. `POST /demo/shipments/SHP-002/vehicle-position` accepts only `START` or `NEAR_DISRUPTION` plus `expectedRevision`; its SQL update is atomic and a stale revision returns `409`. `NEAR_DISRUPTION` is the fixed 3,840-second mapping: `2026-10-03T07:34:00.000Z`, `[10.326863322601533, 53.701048700082]`, and approximately 36.40 km by the 68,242.2 m artifact distance—before B1's documented 36.54 km warning-section start. This is a validated display position, not a B4 candidate rule. Mutations require `NODE_ENV=development` and `LIEFERRADAR_DEMO_CONTROLS_ENABLED=true`; startup now binds loopback. Unit verification passed: 18 suites / 83 tests. Isolated verification passed: 9 database suites / 45 tests and 2 HTTP suites / 15 tests; its container/network were removed. TypeScript, focused demo lint, build and `git diff --check` passed. | B4 deterministic evidence and assessment endpoint remain unstarted; no sequential playback, relevance calculation, Python call or frontend work was added. |
 | B4 | Not started | No real LLM assessment or evaluation run | Key/quota/model access and end-to-end integration |
-| B5 | Not started; optional | No frontend checks run | 45-minute target / 60-minute maximum; retain fallback |
+| B5 | Proposed reduced plan; not started | No frontend checks run | One operator page, 20–30 min; map optional; align D19 |
 | B6 | Not started | No final acceptance checks run | Await required checkpoints; document incomplete work honestly |
 
 **B2 implementation record:** The Python endpoint, compact Pydantic contract, detailed German system prompt and bounded mocked reasoning path are implemented. `DisruptionReasoningService.assess()` now explicitly prepares evidence/messages, invokes the LLM within its deadline, validates model output and evidence references, then attaches the trusted assessment ID. NestJS selects candidates and must exclude a pair when any high-confidence check is `DISTANT`, `CONFLICTING`, `BEHIND`, or timing-`CONFLICTING`; Python rejects those misrouted states. Unknown evidence remains assessable. NestJS-supplied checks include calculated geographic distance when known and explicit unknown states; Python does not receive raw geometry, coordinates, hashes or revisions.

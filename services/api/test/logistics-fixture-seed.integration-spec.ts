@@ -14,6 +14,8 @@ async function createClient(): Promise<Client> {
 }
 
 async function clearLogisticsFixtures(client: Client): Promise<void> {
+  await client.query('DELETE FROM demo_vehicle_shipments');
+  await client.query('DELETE FROM demo_vehicle_state');
   await client.query('DELETE FROM shipments');
   await client.query('DELETE FROM products');
   await client.query('DELETE FROM suppliers');

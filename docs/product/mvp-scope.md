@@ -1,7 +1,7 @@
 # LieferRadar — MVP Scope and Decision Register
 
 **Status:** Approved MVP baseline  
-**Version:** 1.7 · 2026-10-04<br>
+**Version:** 1.9 · 2026-10-05<br>
 **Approval date:** 2026-10-03  
 **Repository location:** `docs/product/mvp-scope.md`  
 **Purpose:** Single source of truth for MVP product scope, agreed architectural decisions, delivery sequence, open concerns and controlled changes.
@@ -45,7 +45,7 @@ Build a demonstrable **AI-assisted logistics disruption copilot**. The system in
 - Implement a **small NestJS simulator module**, not a separate microservice.
 - Associate a mock vehicle with `SHP-002`; advance simulated coordinates along the verified route and publish timestamped position updates. Include a minimal journey state; add speed/heading only as required for the demonstration.
 - Persist the latest vehicle position. Movement history is optional, not required for MVP.
-- Iteration 003 uses one PostgreSQL vehicle-state row with fictional driver metadata, a route hash, historical simulation clock and revision-protected manual reset/advance. Preserve shipment status and the existing two-hour SHP-002 schedule.
+- Iteration 003 uses one PostgreSQL vehicle-state row with fictional driver metadata, a route hash, historical simulation clock and revision-protected backend-owned `START`/`NEAR_DISRUPTION` positioning. Preserve shipment status and the existing two-hour SHP-002 schedule; sequential playback is deferred.
 - Keep simulated telemetry clearly labeled; do not fabricate disruption impact or use a straight line between cities as a driving route.
 
 ### E. Candidate matching
@@ -67,7 +67,7 @@ Build a demonstrable **AI-assisted logistics disruption copilot**. The system in
 - Show shipments, active disruptions and the simulated vehicle on a map or equivalent clear demo interface.
 - Display potential impact, supporting evidence, uncertainty and AI suggestions.
 - Provide a human review/approval step before any operational action. For the MVP, **recording a simulated decision is sufficient**; real driver messaging or operational rerouting is not required.
-- The six-hour demonstration permits an optional one-page Next.js/React Leaflet interface using OSM tiles, with a 45-minute target and strict 60-minute limit. Use HTTP/JSON output if frontend work is cut. Recording approval/rejection is deferred from Iteration 003 and remains required for full MVP completion.
+- The reduced Iteration 003 continuation permits one SHP-002 operator page within 20–30 minutes. A simple route/location presentation is sufficient; React Leaflet/OSM remains optional only within that allowance. Use HTTP/JSON output if frontend work is cut. Recording approval/rejection is deferred from Iteration 003 and remains required for full MVP completion.
 - Authentication implementation is deferred for the loopback-only demonstration. Mutations remain explicitly enabled, demo-only and unavailable in production; public deployment requires an approved authentication design.
 
 ### H. Quality and demonstration
@@ -151,10 +151,10 @@ synchronization, dynamic routing and public mutation access remain deferred.
 | D13 | Iteration A collects official warnings first; closure collection is deferred unless separately approved | Prioritizes the primary A1 demonstration without delaying safe warning ingestion | Approved 2026-10-04 |
 | D14 | Mutation endpoints are disabled by default, local-demo-only, and unavailable in production | Avoids public state-changing operations before an authentication design is approved | Approved 2026-10-04 |
 | D15 | Use one configured local LieferRadar database with explicit guarded demo preparation and a historical simulation clock for recorded A1 evidence | Keeps the MVP in one running system while preserving local-only/prod guards, exact REPLAY verification and clear separation of historical evidence from LIVE state | Revised by explicit approval 2026-10-05 |
-| D16 | Combine essential B/C work into six-hour Iteration 003, checkpoints B1–B6; prioritize one real AI assessment | Produces a complete evidence-to-reasoning flow within the available budget | Approved 2026-10-04; B1–B2 complete, B3–B6 pending |
+| D16 | Retain B1–B3.3 and reduce remaining Iteration 003 work to a 120–180 minute B3.4–B6 sequence, prioritizing one real AI assessment | Protects the evidence-to-reasoning flow while cutting sequential playback, broader live evaluation and nonessential frontend work | Approved 2026-10-05; B1–B3.4 complete, reduced B4–B6 scope pending |
 | D17 | Use the supplied passenger-car ORS route as immutable file-backed demo geometry; no route table or runtime routing | Reuses available geometry while disclosing subsequent capture and unverified HGV suitability | Approved 2026-10-04 for simulation; B1 verification complete |
-| D18 | Persist one fictional vehicle/driver state keyed by vehicle, with current shipment assignments, deterministic historical playback and atomic revision checks | Supports one vehicle carrying several shipments without fleet management or position/assignment history | Approved 2026-10-04; B3.1 persistence verified, playback/API work pending |
-| D19 | Allow optional Next.js/React Leaflet/OSM prototype, 45-minute target and 60-minute maximum, with HTTP/JSON fallback | Limits frontend effort and protects AI delivery; revises earlier map-SDK deferral | Approved 2026-10-04; implementation pending |
+| D18 | Persist one fictional vehicle/driver state keyed by vehicle, with current shipment assignments, two backend-owned manual positions (`START`, `NEAR_DISRUPTION`) and atomic revision checks | Delivers the minimum reproducible vehicle context for assessment without sequential playback, GPS, history or fleet management | Revised by explicit approval 2026-10-05; B3.1–B3.4 complete |
+| D19 | Allow one SHP-002 operator page with named vehicle positioning and assessment output; map/layers are optional within a 20–30 minute allowance, with HTTP/JSON fallback | Protects B4 reasoning delivery while retaining a usable operator demonstration | Revised by explicit approval 2026-10-05; implementation pending |
 | D20 | Reuse Python FastAPI and installed LLM tooling for one bounded versioned structured assessment; RAG is optional | Keeps facts in NestJS and reasoning in Python without unrelated ingestion work | Approved 2026-10-04; B2 mocked Python reasoning complete; B4 integration and live gate pending |
 | D21 | Defer authentication infrastructure and approval/rejection recording from Iteration 003; retain local guards and human authority | No consequential actions are executed; public exposure and full MVP completion retain their separate gates | Approved 2026-10-04; full MVP operator-decision requirement preserved |
 | D22 | Demo preparation verifies the exact historical replay warning; NestJS excludes definite non-candidates before AI; assessments bind vehicle revision and warning content hash | Prevents newer LIVE state being presented as historical evidence, avoids unnecessary AI calls for known exclusions and prevents stale assessments | Approved 2026-10-04; candidate exclusion detail revised by D24; B1 documentation complete, B3/B4 implementation pending |
@@ -211,6 +211,7 @@ For every proposed material change:
 | 2026-10-04 | 1.6 | Revised D24: English candidate explanations | Explicit user approval |
 | 2026-10-04 | 1.7 | Revised D18: vehicle state is keyed by vehicle and linked through a current shipment-assignment table | Explicit user approval |
 | 2026-10-05 | 1.8 | Revised D15: use the configured local LieferRadar database for guarded demo preparation; historical REPLAY and LIVE records may coexist, and the exact REPLAY record remains mandatory | Explicit user approval |
+| 2026-10-05 | 1.9 | Revised D16, D18 and D19 for the reduced Iteration 003 continuation: named manual positioning, one focused assessment flow and a time-bounded simple operator page | Explicit user approval |
 
 ## 10. Definition of MVP done
 

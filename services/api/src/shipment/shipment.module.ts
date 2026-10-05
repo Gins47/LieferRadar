@@ -7,5 +7,6 @@ import { ShipmentService } from './shipment.service';
   imports: [LogisticsModule],
   controllers: [ShipmentController],
   providers: [ShipmentService],
+  exports: [ShipmentService],
 })
 export class ShipmentModule {}

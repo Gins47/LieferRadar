@@ -130,4 +130,38 @@ describe('PostgresDemoVehicleRepository', () => {
       repository.findByShipmentId('SHP-001'),
     ).resolves.toBeUndefined();
   });
+
+  it('updates the latest position only when the expected revision matches', async () => {
+    const created = await repository.create(
+      createVehicleState({ revision: 1 }),
+    );
+
+    await expect(
+      repository.updatePositionIfRevision(created.vehicleId, 1, {
+        elapsedSeconds: 3_840,
+        position: [10.326863322601533, 53.701048700082],
+        simulatedAt: new Date('2026-10-03T07:34:00.000Z'),
+      }),
+    ).resolves.toMatchObject({
+      vehicleId: created.vehicleId,
+      elapsedSeconds: 3_840,
+      position: [10.326863322601533, 53.701048700082],
+      simulatedAt: new Date('2026-10-03T07:34:00.000Z'),
+      revision: 2,
+    });
+
+    await expect(
+      repository.updatePositionIfRevision(created.vehicleId, 1, {
+        elapsedSeconds: 0,
+        position: [10.686606, 53.865509],
+        simulatedAt: new Date('2026-10-03T06:30:00.000Z'),
+      }),
+    ).resolves.toBeUndefined();
+    await expect(
+      repository.findByVehicleId(created.vehicleId),
+    ).resolves.toMatchObject({
+      elapsedSeconds: 3_840,
+      revision: 2,
+    });
+  });
 });

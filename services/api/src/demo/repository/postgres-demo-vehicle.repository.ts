@@ -112,4 +112,42 @@ export class PostgresDemoVehicleRepository {
 
     return result.rows[0] ? mapDemoVehicleState(result.rows[0]) : undefined;
   }
+
+  async updatePositionIfRevision(
+    vehicleId: string,
+    expectedRevision: number,
+    state: Pick<
+      DemoVehicleState,
+      'elapsedSeconds' | 'position' | 'simulatedAt'
+    >,
+  ): Promise<DemoVehicleState | undefined> {
+    const result = await this.database.query<DemoVehicleStateRow>(
+      `UPDATE demo_vehicle_state
+      SET
+        elapsed_seconds = $3,
+        position = $4::jsonb,
+        simulated_at = $5,
+        revision = revision + 1,
+        updated_at = CURRENT_TIMESTAMP
+      WHERE vehicle_id = $1 AND revision = $2
+      RETURNING
+        vehicle_id AS "vehicleId",
+        driver,
+        route_hash AS "routeHash",
+        elapsed_seconds AS "elapsedSeconds",
+        position,
+        simulated_at AS "simulatedAt",
+        revision,
+        updated_at AS "updatedAt"`,
+      [
+        vehicleId,
+        expectedRevision,
+        state.elapsedSeconds,
+        JSON.stringify(state.position),
+        state.simulatedAt,
+      ],
+    );
+
+    return result.rows[0] ? mapDemoVehicleState(result.rows[0]) : undefined;
+  }
 }

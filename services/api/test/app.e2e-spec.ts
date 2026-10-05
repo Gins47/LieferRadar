@@ -63,6 +63,8 @@ describe('AppController (e2e)', () => {
 
     try {
       await client.connect();
+      await client.query('DELETE FROM demo_vehicle_shipments');
+      await client.query('DELETE FROM demo_vehicle_state');
       await client.query('DELETE FROM shipments');
       await client.query('DELETE FROM products');
       await client.query('DELETE FROM suppliers');
