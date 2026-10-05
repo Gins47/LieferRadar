@@ -8,7 +8,10 @@ from typing import Any, Protocol
 from langchain_core.messages import HumanMessage, SystemMessage
 from pydantic import ValidationError
 
-from llm.clients import create_disruption_assessment_llm
+from llm.clients import (
+    create_disruption_assessment_llm,
+    disruption_assessment_model,
+)
 from prompts.disruption_assessment import SYSTEM_PROMPT
 from schemas.disruption import (
     DisruptionAssessment,
@@ -55,31 +58,77 @@ class DisruptionReasoningService:
             reasoning = self._validate_reasoning(request, raw_reasoning)
             assessment = self._build_assessment(request.assessmentId, reasoning)
         except asyncio.TimeoutError as error:
-            logger.warning("Disruption assessment timed out", extra={"assessment_id": request.assessmentId})
+            self._log_outcome(request.assessmentId, started_at, "timeout")
             raise AssessmentTimeoutError("AI assessment timed out") from error
         except ValidationError as error:
+            self._log_outcome(
+                request.assessmentId,
+                started_at,
+                "invalid_model_output",
+                error_type=type(error).__name__,
+            )
             raise InvalidAssessmentOutputError("AI returned an invalid assessment") from error
-        except InvalidAssessmentOutputError:
+        except InvalidAssessmentOutputError as error:
+            self._log_outcome(
+                request.assessmentId,
+                started_at,
+                "invalid_model_output",
+                error_type=type(error).__name__,
+            )
             raise
         except Exception as error:
-            logger.warning(
-                "Disruption assessment failed",
-                extra={"assessment_id": request.assessmentId, "error_type": type(error).__name__},
+            self._log_outcome(
+                request.assessmentId,
+                started_at,
+                self._provider_outcome(error),
+                error_type=type(error).__name__,
+                provider_status=getattr(error, "status_code", None),
             )
             raise AssessmentUnavailableError("AI assessment is unavailable") from error
 
-        logger.info(
-            "Disruption assessment completed",
-            extra={
-                "assessment_id": request.assessmentId,
-                "duration_ms": round((monotonic() - started_at) * 1_000),
-            },
-        )
+        self._log_outcome(request.assessmentId, started_at, "success")
         return assessment
+
+    @staticmethod
+    def _provider_outcome(error: Exception) -> str:
+        status = getattr(error, "status_code", None)
+        if status in (401, 403):
+            return "authentication_failure"
+        if status == 429:
+            return "quota_or_rate_limit"
+        if isinstance(status, int) and 400 <= status < 500:
+            return "provider_request_failure"
+        return "provider_failure"
+
+    @staticmethod
+    def _log_outcome(
+        assessment_id: str,
+        started_at: float,
+        outcome: str,
+        *,
+        error_type: str | None = None,
+        provider_status: int | None = None,
+    ) -> None:
+        details = [
+            "disruption_assessment",
+            f"assessment_id={assessment_id}",
+            f"model={disruption_assessment_model()}",
+            f"duration_ms={round((monotonic() - started_at) * 1_000)}",
+            f"outcome={outcome}",
+        ]
+        if error_type:
+            details.append(f"error_type={error_type}")
+        if isinstance(provider_status, int):
+            details.append(f"provider_status={provider_status}")
+        logger.warning(" ".join(details))
 
     def _prepare_messages(self, request: DisruptionAssessmentRequest) -> list[Any]:
         """Prepare the compact evidence payload as untrusted LLM input."""
-        evidence = json.dumps(request.model_dump(mode="json"), ensure_ascii=False)
+        evidence = json.dumps(
+            request.model_dump(mode="json", exclude={"assessmentId"}),
+            ensure_ascii=False,
+        )
+        disruption_id = request.disruption.evidenceId
         check_ids = ", ".join(
             (
                 request.checks.geographic.id,
@@ -90,13 +139,13 @@ class DisruptionReasoningService:
         )
         limitation_ids = ", ".join(limitation.id for limitation in request.limitations)
         evidence_instruction = (
-            "Cite every supplied check and limitation ID in supportingEvidence. "
+            "Cite the supplied disruption evidence ID, every check, and every limitation ID in supportingEvidence. "
             "Place IDs only in factIds, never in human-readable text. "
-            f"Check IDs: {check_ids}. Limitation IDs: {limitation_ids}."
+            f"Disruption ID: {disruption_id}. Check IDs: {check_ids}. Limitation IDs: {limitation_ids}."
             if limitation_ids
             else (
-                "Cite every supplied check ID in supportingEvidence and place IDs "
-                f"only in factIds: {check_ids}."
+                "Cite the supplied disruption evidence ID and every check ID in supportingEvidence; "
+                f"place IDs only in factIds. Disruption ID: {disruption_id}. Check IDs: {check_ids}."
             )
         )
         return [
@@ -133,12 +182,27 @@ class DisruptionReasoningService:
         if not referenced_fact_ids.issubset(request.evidence_ids):
             raise InvalidAssessmentOutputError("AI assessment references unknown evidence")
 
+        if request.disruption.evidenceId not in referenced_fact_ids:
+            raise InvalidAssessmentOutputError(
+                "AI assessment does not acknowledge the supplied disruption evidence"
+            )
+
         uncited_limitations = {
             limitation.id for limitation in request.limitations
         } - referenced_fact_ids
         if uncited_limitations:
             raise InvalidAssessmentOutputError(
                 "AI assessment does not acknowledge every supplied limitation"
+            )
+        uncited_checks = {
+            request.checks.geographic.id,
+            request.checks.direction.id,
+            request.checks.routePosition.id,
+            request.checks.timing.id,
+        } - referenced_fact_ids
+        if uncited_checks:
+            raise InvalidAssessmentOutputError(
+                "AI assessment does not acknowledge every supplied deterministic check"
             )
         return reasoning
 

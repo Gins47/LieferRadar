@@ -11,9 +11,13 @@ embeddings = OpenAIEmbeddings(
 )
 
 
+def disruption_assessment_model() -> str:
+    return os.getenv("OPENAI_DISRUPTION_MODEL", "gpt-4o-mini")
+
+
 def create_disruption_assessment_llm():
     client = ChatOpenAI(
-        model=os.getenv("OPENAI_DISRUPTION_MODEL", "gpt-4o-mini"),
+        model=disruption_assessment_model(),
         api_key=settings.openai_api_key,
         temperature=0,
         timeout=25,

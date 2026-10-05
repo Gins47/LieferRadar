@@ -7,6 +7,9 @@ import {
   Post,
 } from '@nestjs/common';
 import { ZodValidationPipe } from '../common/pipes/zod-body-validation.pipe';
+import { demoAssessmentSchema } from './demo-assessment.dto';
+import type { DemoAssessmentRequest } from './demo-assessment.dto';
+import { DemoAssessmentService } from './demo-assessment.service';
 import { demoVehiclePositionSchema } from './demo-position.dto';
 import type { DemoVehiclePositionRequest } from './demo-position.dto';
 import { DemoService } from './demo.service';
@@ -20,7 +23,10 @@ function demoControlsEnabled(): boolean {
 
 @Controller('demo/shipments')
 export class DemoController {
-  constructor(private readonly demo: DemoService) {}
+  constructor(
+    private readonly demo: DemoService,
+    private readonly assessments: DemoAssessmentService,
+  ) {}
 
   @Get(':id')
   getShipmentScenario(@Param('id') id: string) {
@@ -38,5 +44,17 @@ export class DemoController {
     }
 
     return this.demo.setVehiclePosition(id, request);
+  }
+
+  @Post(':id/assessment')
+  assess(
+    @Param('id') id: string,
+    @Body(new ZodValidationPipe(demoAssessmentSchema))
+    request: DemoAssessmentRequest,
+  ) {
+    if (!demoControlsEnabled()) {
+      throw new NotFoundException();
+    }
+    return this.assessments.assess(id, request);
   }
 }

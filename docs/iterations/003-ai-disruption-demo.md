@@ -1,7 +1,7 @@
 # Iteration 003 — AI Disruption Demonstration
 
 **Project:** LieferRadar<br>
-**Status:** B1–B2 accepted; B3.1–B3.4 complete; B4–B6 not started<br>
+**Status:** B1–B4 accepted; B5–B6 not started<br>
 **Approval date:** 2026-10-04<br>
 **Dependencies:** Iterations 001 and 002; existing NestJS and Python services<br>
 **Budget:** Original six-hour allocation; approved remaining scope: 120–180 minutes including verification
@@ -85,7 +85,7 @@ Support SHP-002 only in this demonstration. Named positioning uses an atomic `ex
 
 ### B3.4 local demonstration walkthrough
 
-This walkthrough demonstrates the completed persisted vehicle, route and historical-warning portion of Iteration 003. B4 has not started: `POST /demo/shipments/SHP-002/assessment` is not available yet, and no disruption-impact conclusion should be drawn from positioning alone.
+This walkthrough demonstrates the completed persisted vehicle, route and historical-warning portion of Iteration 003. B4 adds `POST /demo/shipments/SHP-002/assessment`; it returns deterministic evidence and either an exclusion or a validated AI assessment when the configured provider is available. Positioning alone remains no disruption-impact conclusion.
 
 1. Start the local PostgreSQL service from the repository root, if it is not already running:
 
@@ -414,7 +414,7 @@ Update this checklist and table after each checkpoint. Record date, commands, ex
 - [x] B3.2 — Deterministic route loading and fictional position calculation verified.
 - [x] B3.3 — Guarded demo preparation verified.
 - [x] B3.4 — Manual demonstration positioning verified.
-- [ ] B4 — Real backend assessment and evaluation verified.
+- [x] B4 — Complete backend assessment accepted.
 - [ ] B5 — Frontend delivered or time-limit fallback explicitly recorded.
 - [ ] B6 — Final acceptance and diff review completed.
 
@@ -426,7 +426,7 @@ Update this checklist and table after each checkpoint. Record date, commands, ex
 | B3.2 | Complete — 2026-10-04 | The injectable route service validates the immutable GeoJSON hash, LineString, WGS84 coordinates and provenance. Unit tests cover boundaries, Haversine distance progression, repeated coordinates, invalid elapsed seconds, deterministic results, invalid geometry and hash mismatch. Focused route tests passed (10 tests); API unit tests passed (15 suites / 63 tests); TypeScript, focused lint and build passed. | Geometry is later-captured passenger-car demonstration data, not historical vehicle tracking or HGV route evidence. |
 | B3.3 | Complete — 2026-10-05 | Corrected architecture: `prepare:ai-disruption-demo` uses the configured local `DATABASE_URL`, never a second demo URL/database. It remains explicit (`--demo`), local/development-only and unavailable in production or the integration-test context. It seeds logistics fixtures, preserves any existing approved vehicle progress/revision, replays the recorded A1 fixture, then queries `autobahn` / `INRIX--vi-avl.2026-10-03_06-53-00-000_003.de0` and requires `REPLAY`; newer LIVE state is a visible failure. Focused guard/preparation tests passed (10 tests); full API unit tests passed (17 suites / 73 tests); isolated integration and HTTP verification passed (9 database suites / 44 tests; 1 HTTP suite / 9 tests) and removed its container/network. TypeScript, focused lint, build and `git diff --check` passed. Checkpoint-review correction: the shared guard now requires `NODE_ENV=development` and rejects `test`, `production`, unset and other environment modes; 15 focused guard/preparation tests, TypeScript, focused lint and `git diff --check` passed. | Run local migrations before preparation. B3.4 local read/reset/advance APIs remain unstarted. |
 | B3.4 | Complete — 2026-10-05 | `GET /demo/shipments/SHP-002` returns the prepared shipment, fictional vehicle/driver, state/revision, immutable route/provenance and only the exact `autobahn` / `INRIX--vi-avl.2026-10-03_06-53-00-000_003.de0` `REPLAY` warning. `POST /demo/shipments/SHP-002/vehicle-position` accepts only `START` or `NEAR_DISRUPTION` plus `expectedRevision`; its SQL update is atomic and a stale revision returns `409`. `NEAR_DISRUPTION` is the fixed 3,840-second mapping: `2026-10-03T07:34:00.000Z`, `[10.326863322601533, 53.701048700082]`, and approximately 36.40 km by the 68,242.2 m artifact distance—before B1's documented 36.54 km warning-section start. This is a validated display position, not a B4 candidate rule. Mutations require `NODE_ENV=development` and `LIEFERRADAR_DEMO_CONTROLS_ENABLED=true`; startup now binds loopback. Unit verification passed: 18 suites / 83 tests. Isolated verification passed: 9 database suites / 45 tests and 2 HTTP suites / 15 tests; its container/network were removed. TypeScript, focused demo lint, build and `git diff --check` passed. | B4 deterministic evidence and assessment endpoint remain unstarted; no sequential playback, relevance calculation, Python call or frontend work was added. |
-| B4 | Not started | No real LLM assessment or evaluation run | Key/quota/model access and end-to-end integration |
+| B4 | Complete — 2026-10-05 | NestJS prepares the version-1 evidence for the exact selected `REPLAY` warning using the 25 m warning-geometry-to-remaining-route tolerance, returns definite exclusions without Python, and otherwise calls FastAPI through a 30-second, no-retry native-fetch client with Zod validation. Assessment input is strict (`expectedRevision` only); the trusted assessment ID, disruption ID, all four check IDs, every limitation ID and human-review actions are required before returning. Vehicle revision, assignment, warning identity/content hash and REPLAY provenance are reread before return. Python excludes the application-owned ID from LLM evidence and emits one safe attempt log with assessment ID, configured model, duration, outcome and bounded failure metadata. Initial real diagnosis found FastAPI returned 200 but the LLM omitted the disruption evidence ID; NestJS correctly rejected it. Python prompt/output validation now require that ID too. Current correction checks passed: 18 Python tests, OpenAPI import with `DEBUG=false`, and `git diff --check`. Earlier B4 API unit (21 suites / 92 tests), isolated DB/HTTP (9 suites / 45 tests; 2 suites / 16 tests), TypeScript, focused lint and build remain passing. Real NestJS → FastAPI → `gpt-4o-mini` smoke then succeeded: Python duration 4,950 ms; outer HTTP duration 5.021 s; outcome `success`; checks `NEAR_REMAINING_ROUTE`, `COMPATIBLE`, `AHEAD_OR_ALONGSIDE`, `POSSIBLE`. The validated English result cited the disruption, all four checks and all five limitations, contained missing-end-time uncertainty and human-review actions, did not invent a numeric shipment delay/ETA, and retained assessment ID `db6513e4-fdfd-4d6a-81d0-a708e690c2da`. Current state after return remained revision 6 with the exact selected REPLAY warning. | Local AI-service startup still requires a boolean `DEBUG` value; the committed code is unaffected. B5 remains unstarted. |
 | B5 | Proposed reduced plan; not started | No frontend checks run | One operator page, 20–30 min; map optional; align D19 |
 | B6 | Not started | No final acceptance checks run | Await required checkpoints; document incomplete work honestly |
 
@@ -434,9 +434,9 @@ Update this checklist and table after each checkpoint. Record date, commands, ex
 
 **B2 live evaluation — 2026-10-04:** The initial live call omitted the later-captured passenger-car route limitation and was rejected by stable-ID coverage validation. A subsequent correction adds an explicit per-request list of required check and limitation IDs; every supplied limitation must be cited in `supportingEvidence`, while `missingEvidence` remains for information absent from the request. The earlier repeated call returned German output with all four checks and all four limitation IDs, described `POSSIBLE` as possible overlap, identified the route as later captured with a passenger-car profile, and preserved historical replay and simulated-vehicle uncertainty. It did not present the provider-reported 18 minutes as a confirmed or minimum shipment delay.
 
-**B2 non-blocking follow-ups — 2026-10-04:**
+**B2 follow-ups completed during B4 — 2026-10-05:**
 
 1. Exclude the application-owned `assessmentId` from the LLM prompt while continuing to attach the trusted ID after output validation.
 2. Add deterministic response validation requiring the LLM to cite all four supplied check IDs, alongside the existing limitation-coverage validation.
 
-These follow-ups do not block B3. They do not change the current external API contract.
+These changes preserve the current external API contract.

@@ -64,7 +64,8 @@ export class DemoService {
   ) {}
 
   async getShipmentScenario(shipmentId: string) {
-    const { shipment, vehicle, warning } = await this.loadScenario(shipmentId);
+    const { shipment, vehicle, warning } =
+      await this.getPreparedScenario(shipmentId);
     const route = this.route.getRoute();
 
     return {
@@ -83,7 +84,7 @@ export class DemoService {
     shipmentId: string,
     request: DemoVehiclePositionRequest,
   ) {
-    const { vehicle } = await this.loadScenario(shipmentId);
+    const { vehicle } = await this.getPreparedScenario(shipmentId);
     const target = targetForPosition(request.position);
     const updated = await this.vehicles.updatePositionIfRevision(
       vehicle.vehicleId,
@@ -104,7 +105,7 @@ export class DemoService {
     return updated;
   }
 
-  private async loadScenario(shipmentId: string): Promise<{
+  async getPreparedScenario(shipmentId: string): Promise<{
     shipment: Awaited<ReturnType<ShipmentService['getShipment']>>;
     vehicle: DemoVehicleState;
     warning: Disruption;

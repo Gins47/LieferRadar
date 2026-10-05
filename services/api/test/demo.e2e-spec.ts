@@ -4,6 +4,7 @@ import { Client } from 'pg';
 import request from 'supertest';
 import { App } from 'supertest/types';
 import { AppModule } from '../src/app.module';
+import { DisruptionAssessmentClient } from '../src/integrations/ai/disruption-assessment.client';
 import {
   DEMO_SHIPMENT_ID,
   DemoPreparationService,
@@ -29,13 +30,46 @@ describe('demo positioning (e2e)', () => {
   let app: INestApplication<App> | undefined;
   let client: Client | undefined;
   let preparation: DemoPreparationService;
+  const ai = {
+    assess: jest.fn(async (input: any) => ({
+      assessmentId: input.assessmentId,
+      operatorMessage: 'The warning may affect the simulated shipment.',
+      supportingEvidence: [
+        {
+          factIds: [
+            input.disruption.evidenceId,
+            input.checks.geographic.id,
+            input.checks.direction.id,
+            input.checks.routePosition.id,
+            input.checks.timing.id,
+            ...input.limitations.map((item: { id: string }) => item.id),
+          ],
+          explanation:
+            'The supplied deterministic evidence is compatible with a possible impact.',
+        },
+      ],
+      missingEvidence: [],
+      uncertainty: ['The warning duration is unknown.'],
+      possibleConsequences: ['An operator may need to review the plan.'],
+      recommendedActions: [
+        {
+          action: 'VERIFY_INFORMATION',
+          rationale: 'Verify current traffic information before deciding.',
+          requiresHumanReview: true,
+        },
+      ],
+    })),
+  };
 
   beforeAll(async () => {
     client = new Client({ connectionString: getTestDatabaseUrl() });
     await client.connect();
     const module: TestingModule = await Test.createTestingModule({
       imports: [AppModule],
-    }).compile();
+    })
+      .overrideProvider(DisruptionAssessmentClient)
+      .useValue(ai)
+      .compile();
     app = module.createNestApplication();
     await app.init();
     preparation = app.get(DemoPreparationService);
@@ -50,6 +84,7 @@ describe('demo positioning (e2e)', () => {
     await client!.query('DELETE FROM products');
     await client!.query('DELETE FROM suppliers');
     await seedLogisticsFixtures(client!);
+    ai.assess.mockClear();
   });
 
   afterAll(async () => {
@@ -106,7 +141,7 @@ describe('demo positioning (e2e)', () => {
   });
 
   it.each(['test', 'production'])(
-    'keeps positioning disabled in %s even when controls are requested',
+    'keeps positioning and assessment disabled in %s even when controls are requested',
     async (nodeEnv) => {
       await preparation.prepare();
       process.env.NODE_ENV = nodeEnv;
@@ -115,6 +150,11 @@ describe('demo positioning (e2e)', () => {
       await request(app!.getHttpServer())
         .post(`/demo/shipments/${DEMO_SHIPMENT_ID}/vehicle-position`)
         .send({ position: 'NEAR_DISRUPTION', expectedRevision: 0 })
+        .expect(404);
+
+      await request(app!.getHttpServer())
+        .post(`/demo/shipments/${DEMO_SHIPMENT_ID}/assessment`)
+        .send({ expectedRevision: 0 })
         .expect(404);
     },
   );
@@ -179,5 +219,46 @@ describe('demo positioning (e2e)', () => {
     await request(app!.getHttpServer())
       .get(`/demo/shipments/${DEMO_SHIPMENT_ID}`)
       .expect(409);
+  });
+
+  it('assesses the positioned candidate with backend-owned evidence only', async () => {
+    await preparation.prepare();
+    process.env.NODE_ENV = 'development';
+    process.env.LIEFERRADAR_DEMO_CONTROLS_ENABLED = 'true';
+
+    await request(app!.getHttpServer())
+      .post(`/demo/shipments/${DEMO_SHIPMENT_ID}/vehicle-position`)
+      .send({ position: 'NEAR_DISRUPTION', expectedRevision: 0 })
+      .expect(201);
+
+    await request(app!.getHttpServer())
+      .post(`/demo/shipments/${DEMO_SHIPMENT_ID}/assessment`)
+      .send({ expectedRevision: 1 })
+      .expect(201)
+      .expect((response) => {
+        expect(response.body).toMatchObject({
+          outcome: 'ASSESSED',
+          evidence: {
+            checks: {
+              geographic: { state: 'NEAR_REMAINING_ROUTE' },
+              direction: { state: 'COMPATIBLE' },
+              routePosition: { state: 'AHEAD_OR_ALONGSIDE' },
+              timing: { state: 'POSSIBLE' },
+            },
+          },
+          assessment: {
+            operatorMessage: expect.any(String),
+            recommendedActions: [
+              expect.objectContaining({ requiresHumanReview: true }),
+            ],
+          },
+        });
+      });
+    expect(ai.assess).toHaveBeenCalledTimes(1);
+
+    await request(app!.getHttpServer())
+      .post(`/demo/shipments/${DEMO_SHIPMENT_ID}/assessment`)
+      .send({ expectedRevision: 1, providerId: 'browser-supplied' })
+      .expect(400);
   });
 });
