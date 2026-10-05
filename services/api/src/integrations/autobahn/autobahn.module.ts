@@ -8,5 +8,6 @@ import { AutobahnController } from './autobahn.controller';
   imports: [DisruptionModule],
   controllers: [AutobahnController],
   providers: [AutobahnClient, AutobahnCollectionService],
+  exports: [AutobahnCollectionService],
 })
 export class AutobahnModule {}
