@@ -22,3 +22,11 @@ uv run uvicorn main:app --reload --port 8080
 ```shell
 DEBUG=true uv run alembic revision --autogenerate -m "create knowledge tables"
 ```
+
+# Langfuse
+
+**Run test**
+
+```shell
+uv run --env-file .env python -m evals.run_langfuse_experiment
+```

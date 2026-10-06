@@ -18,12 +18,18 @@ from schemas.disruption import (
     DisruptionAssessmentRequest,
     LlmDisruptionReasoning,
 )
+from langfuse import get_client, propagate_attributes
+from langfuse.langchain import CallbackHandler
 
 logger = logging.getLogger(__name__)
 
 
 class StructuredAssessmentRunnable(Protocol):
-    async def ainvoke(self, input: Any) -> Any: ...
+    async def ainvoke(
+        self,
+        input: Any,
+        config: dict[str, Any] | None = None,
+    ) -> Any: ...
 
 
 class AssessmentUnavailableError(Exception):
@@ -47,7 +53,7 @@ class DisruptionReasoningService:
         self._llm_factory = llm_factory
         self._timeout_seconds = timeout_seconds
 
-    async def assess(
+    async def _ai_assess(
         self, request: DisruptionAssessmentRequest
     ) -> DisruptionAssessment:
         """Create a validated operator explanation for a NestJS-selected candidate."""
@@ -89,6 +95,37 @@ class DisruptionReasoningService:
         self._log_outcome(request.assessmentId, started_at, "success")
         return assessment
 
+    async def assess(self, request: DisruptionAssessmentRequest) -> DisruptionAssessment:
+        
+        """Create a validated operator explanation for a NestJS-selected candidate."""
+        langfuse = get_client()
+
+        with langfuse.start_as_current_observation(
+            as_type="span",
+            name="disruption-assessment",
+            input={
+                "assessmentId": request.assessmentId,
+                "shipmentId": request.shipment.id,
+                "disruptionEvidenceId": request.disruption.evidenceId,
+                "ingestionMode": request.disruption.ingestionMode,
+            },
+        ) as observation:
+            with propagate_attributes(
+                metadata={
+                    "assessmentId": request.assessmentId,
+                    "shipmentId": request.shipment.id,
+                    "model": disruption_assessment_model(),
+                },
+                tags=["disruption-assessment"],
+            ):
+                assessment = await self._ai_assess(request)
+
+            observation.update(
+                output=assessment.model_dump(mode="json"),
+            )
+
+            return assessment
+    
     @staticmethod
     def _provider_outcome(error: Exception) -> str:
         status = getattr(error, "status_code", None)
@@ -162,8 +199,14 @@ class DisruptionReasoningService:
 
     async def _invoke_llm(self, messages: list[Any]) -> Any:
         """Invoke the configured structured LLM within the assessment deadline."""
+        langfuse_handler = CallbackHandler()
         return await asyncio.wait_for(
-            self._llm_factory().ainvoke(messages),
+            self._llm_factory().ainvoke(
+                messages,
+                config={
+                    "callbacks": [langfuse_handler],
+                },
+            ),
             timeout=self._timeout_seconds,
         )
 
