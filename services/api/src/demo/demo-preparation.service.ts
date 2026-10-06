@@ -59,7 +59,7 @@ function expectedVehicleState(
     },
     routeHash: route.getRoute().routeHash,
     elapsedSeconds: 0,
-    position: route.positionAtElapsedSeconds(0),
+    position: [10.686606, 53.865509],
     simulatedAt: DEMO_START_AT,
     revision: 0,
   };

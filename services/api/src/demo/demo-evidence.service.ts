@@ -271,75 +271,153 @@ function limitations(warning: Disruption) {
 export class DemoEvidenceService {
   constructor(private readonly routeService: LuebeckHamburgRouteService) {}
 
+  private evaluateRouteRelevance(
+    vehicle: DemoVehicleState,
+    warning: Disruption,
+  ): {
+    geographic: DisruptionAssessmentRequest['checks']['geographic'];
+    routePosition: DisruptionAssessmentRequest['checks']['routePosition'];
+  } {
+    const unknown = {
+      geographic: {
+        id: 'check-geographic' as const,
+        state: 'UNKNOWN' as const,
+        distanceMetres: null,
+        toleranceMetres: null,
+      },
+      routePosition: {
+        id: 'check-route-position' as const,
+        state: 'UNKNOWN' as const,
+      },
+    };
+
+    const route = this.routeService.getRoute();
+    const warningGeometry = warningLineString(warning);
+
+    if (!warningGeometry) {
+      return unknown;
+    }
+
+    const latitude = referenceLatitude([
+      ...route.coordinates,
+      ...warningGeometry,
+    ]);
+
+    const projectedRoute = routePoints(route, latitude);
+
+    // Where is the vehicle along the shipment route?
+    const vehicleProjection = projectOntoRoute(
+      toPoint(vehicle.position, latitude),
+      projectedRoute,
+    );
+
+    // Where is the warning along the shipment route?
+    const warningProjections = sampleLineString(
+      warningGeometry.map((coordinate) => toPoint(coordinate, latitude)),
+    ).map((point) => projectOntoRoute(point, projectedRoute));
+
+    if (warningProjections.length === 0) {
+      return unknown;
+    }
+
+    const vehicleRouteDistance = vehicleProjection.routeDistanceMetres;
+
+    const warningAhead = warningProjections.filter(
+      (projection) => projection.routeDistanceMetres >= vehicleRouteDistance,
+    );
+
+    const minimumDistanceToRemainingRoute = Math.min(
+      ...warningAhead.map((projection) => projection.distanceToRouteMetres),
+    );
+
+    const geographic = Number.isFinite(minimumDistanceToRemainingRoute)
+      ? {
+          id: 'check-geographic' as const,
+          state:
+            minimumDistanceToRemainingRoute <= WARNING_ROUTE_TOLERANCE_METRES
+              ? ('NEAR_REMAINING_ROUTE' as const)
+              : ('DISTANT' as const),
+          distanceMetres: minimumDistanceToRemainingRoute,
+          toleranceMetres: WARNING_ROUTE_TOLERANCE_METRES,
+        }
+      : unknown.geographic;
+
+    const warningIsOnRoute = warningProjections.every(
+      (projection) =>
+        projection.distanceToRouteMetres <= WARNING_ROUTE_TOLERANCE_METRES,
+    );
+
+    if (!warningIsOnRoute) {
+      return {
+        geographic,
+        routePosition: unknown.routePosition,
+      };
+    }
+
+    const warningEndRouteDistance = Math.max(
+      ...warningProjections.map((projection) => projection.routeDistanceMetres),
+    );
+
+    const routePosition = {
+      id: 'check-route-position' as const,
+      state:
+        warningEndRouteDistance < vehicleRouteDistance
+          ? ('BEHIND' as const)
+          : ('AHEAD_OR_ALONGSIDE' as const),
+    };
+
+    return {
+      geographic,
+      routePosition,
+    };
+  }
+
+  /**
+   *
+   * @param request
+   * @returns
+   */
+  private getExclusionReasons(request: DisruptionAssessmentRequest): string[] {
+    const reasons: string[] = [];
+
+    if (request.checks.geographic.state === 'DISTANT') {
+      reasons.push('geographic');
+    }
+
+    if (request.checks.direction.state === 'CONFLICTING') {
+      reasons.push('direction');
+    }
+
+    if (request.checks.routePosition.state === 'BEHIND') {
+      reasons.push('routePosition');
+    }
+
+    if (request.checks.timing.state === 'CONFLICTING') {
+      reasons.push('timing');
+    }
+
+    return reasons;
+  }
+
+  /**
+   *
+   * @param shipment
+   * @param vehicle
+   * @param warning
+   * @param assessmentId
+   * @returns
+   */
   prepare(
     shipment: ShipmentView,
     vehicle: DemoVehicleState,
     warning: Disruption,
     assessmentId: string,
   ): DemoAssessmentEvidence {
-    const route = this.routeService.getRoute();
-    const warningGeometry = warningLineString(warning);
-    let geographic: DisruptionAssessmentRequest['checks']['geographic'] = {
-      id: 'check-geographic',
-      state: 'UNKNOWN',
-      distanceMetres: null,
-      toleranceMetres: null,
-    };
-    let routePosition: DisruptionAssessmentRequest['checks']['routePosition'] =
-      {
-        id: 'check-route-position',
-        state: 'UNKNOWN',
-      };
-
-    if (warningGeometry) {
-      const latitude = referenceLatitude([
-        ...route.coordinates,
-        ...warningGeometry,
-      ]);
-      const projectedRoute = routePoints(route, latitude);
-      const samples = sampleLineString(
-        warningGeometry.map((item) => toPoint(item, latitude)),
-      );
-      const vehicleRouteDistance =
-        (vehicle.elapsedSeconds / 7_200) * projectedRoute.total;
-      const projections = samples.map((item) =>
-        projectOntoRoute(item, projectedRoute),
-      );
-      const remaining = projections.filter(
-        (item) => item.routeDistanceMetres >= vehicleRouteDistance,
-      );
-      const minimumRemainingDistance = Math.min(
-        ...remaining.map((item) => item.distanceToRouteMetres),
-      );
-
-      if (Number.isFinite(minimumRemainingDistance)) {
-        geographic = {
-          id: 'check-geographic',
-          state:
-            minimumRemainingDistance <= WARNING_ROUTE_TOLERANCE_METRES
-              ? 'NEAR_REMAINING_ROUTE'
-              : 'DISTANT',
-          distanceMetres: minimumRemainingDistance,
-          toleranceMetres: WARNING_ROUTE_TOLERANCE_METRES,
-        };
-      }
-
-      const maxProjectionDistance = Math.max(
-        ...projections.map((item) => item.distanceToRouteMetres),
-      );
-      if (maxProjectionDistance <= WARNING_ROUTE_TOLERANCE_METRES) {
-        const last = Math.max(
-          ...projections.map((item) => item.routeDistanceMetres),
-        );
-        routePosition = {
-          id: 'check-route-position',
-          state: last < vehicleRouteDistance ? 'BEHIND' : 'AHEAD_OR_ALONGSIDE',
-        };
-      }
-    }
+    const routeRelevance = this.evaluateRouteRelevance(vehicle, warning);
 
     const request = disruptionAssessmentRequestSchema.parse({
       assessmentId,
+
       shipment: {
         id: shipment.id,
         pickupCity: shipment.pickupLocation.city,
@@ -347,11 +425,13 @@ export class DemoEvidenceService {
         pickupAt: shipment.pickupAt.toISOString(),
         plannedDeliveryAt: shipment.plannedDeliveryAt.toISOString(),
       },
+
       vehicle: {
         id: vehicle.vehicleId,
         simulated: true,
         simulatedAt: vehicle.simulatedAt.toISOString(),
       },
+
       disruption: {
         evidenceId: `warning-${warning.id}`,
         source: warning.source,
@@ -366,32 +446,32 @@ export class DemoEvidenceService {
         endTimestamp: toContractTimestamp(warning.endTimestamp),
         delayMinutes: warning.delayMinutes,
       },
+
       checks: {
-        geographic,
+        geographic: routeRelevance.geographic,
+
         direction: {
           id: 'check-direction',
           state: directionState(shipment, warning),
         },
-        routePosition,
+
+        routePosition: routeRelevance.routePosition,
+
         timing: {
           id: 'check-timing',
           state: timingState(shipment, vehicle, warning),
         },
       },
+
       limitations: limitations(warning),
     });
 
-    const exclusions = [
-      request.checks.geographic.state === 'DISTANT' && 'geographic',
-      request.checks.direction.state === 'CONFLICTING' && 'direction',
-      request.checks.routePosition.state === 'BEHIND' && 'routePosition',
-      request.checks.timing.state === 'CONFLICTING' && 'timing',
-    ].filter((value): value is string => Boolean(value));
+    const exclusionReasons = this.getExclusionReasons(request);
 
     return {
       request,
-      excluded: exclusions.length > 0,
-      exclusionReasons: exclusions,
+      excluded: exclusionReasons.length > 0,
+      exclusionReasons,
     };
   }
 }

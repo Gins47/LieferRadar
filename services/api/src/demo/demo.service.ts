@@ -12,13 +12,20 @@ import {
   SELECTED_WARNING_PROVIDER_ID,
   SELECTED_WARNING_SOURCE,
 } from './demo-preparation.service';
-import { DemoVehicleState } from './model/demo-vehicle-state.model';
+import {
+  DemoVehicleState,
+  DemoPosition,
+} from './model/demo-vehicle-state.model';
 import { DemoVehiclePositionRequest } from './demo-position.dto';
 import { PostgresDemoVehicleRepository } from './repository/postgres-demo-vehicle.repository';
 import { LuebeckHamburgRouteService } from './route/luebeck-hamburg-route.service';
 import { DemoEvidenceService } from './demo-evidence.service';
 
 export const NEAR_DISRUPTION_ELAPSED_SECONDS = 3_840;
+
+const START_POSITION: DemoPosition = [10.686606, 53.865509];
+
+const NEAR_DISRUPTION_POSITION: DemoPosition = [10.3268633226, 53.7010487001];
 
 type DemoPositionName = DemoVehiclePositionRequest['position'];
 
@@ -27,13 +34,21 @@ interface DemoPositionTarget {
   simulatedAt: Date;
 }
 
+interface DemoPositionTarget {
+  elapsedSeconds: number;
+  simulatedAt: Date;
+  position: DemoPosition;
+}
+
 function targetForPosition(position: DemoPositionName): DemoPositionTarget {
-  const elapsedSeconds =
-    position === 'START' ? 0 : NEAR_DISRUPTION_ELAPSED_SECONDS;
+  const isStart = position === 'START';
+
+  const elapsedSeconds = isStart ? 0 : NEAR_DISRUPTION_ELAPSED_SECONDS;
 
   return {
     elapsedSeconds,
     simulatedAt: new Date(DEMO_START_AT.getTime() + elapsedSeconds * 1_000),
+    position: isStart ? START_POSITION : NEAR_DISRUPTION_POSITION,
   };
 }
 
@@ -147,7 +162,7 @@ export class DemoService {
       request.expectedRevision,
       {
         elapsedSeconds: target.elapsedSeconds,
-        position: this.route.positionAtElapsedSeconds(target.elapsedSeconds),
+        position: target.position,
         simulatedAt: target.simulatedAt,
       },
     );
