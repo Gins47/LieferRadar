@@ -85,6 +85,30 @@ describe('PostgresLogisticsRepository', () => {
     );
   });
 
+  it('persists a created shipment through the existing shipments table', async () => {
+    const created = await repository.createShipment({
+      id: 'SHP-CREATED-001',
+      supplierId: 'SUP-001',
+      productId: 'PROD-001',
+      quantity: 25,
+      pickupLocation: { city: 'Ulm', countryCode: 'DE' },
+      destination: { city: 'Berlin', countryCode: 'DE' },
+      plannedRoute: ['A8', 'A9'],
+      status: 'PLANNED',
+      pickupAt: new Date('2026-10-06T08:00:00.000Z'),
+      plannedDeliveryAt: new Date('2026-10-06T14:00:00.000Z'),
+    });
+
+    expect(created).toMatchObject({
+      id: 'SHP-CREATED-001',
+      status: 'PLANNED',
+      plannedRoute: ['A8', 'A9'],
+    });
+    await expect(repository.findShipmentById(created.id)).resolves.toEqual(
+      created,
+    );
+  });
+
   it('returns undefined for missing records', async () => {
     await expect(
       repository.findSupplierById('SUP-MISSING'),

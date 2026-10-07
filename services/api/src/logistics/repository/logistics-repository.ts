@@ -5,6 +5,7 @@ import { Supplier } from '../model/supplier.model';
 export const LOGISTICS_REPOSITORY = Symbol('LOGISTICS_REPOSITORY');
 
 export interface LogisticsRepository {
+  createShipment(shipment: Shipment): Promise<Shipment>;
   findAllShipments(): Promise<Shipment[]>;
   findSupplierById(id: string): Promise<Supplier | undefined>;
   findProductById(id: string): Promise<Product | undefined>;

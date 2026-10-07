@@ -38,6 +38,7 @@ describe('ShipmentService', () => {
 
   beforeEach(async () => {
     repository = {
+      createShipment: jest.fn(),
       findAllShipments: jest.fn(),
       findSupplierById: jest.fn(),
       findProductById: jest.fn(),
@@ -124,5 +125,72 @@ describe('ShipmentService', () => {
     repository.findShipmentById.mockRejectedValue(databaseError);
 
     await expect(service.getShipment('SHP-001')).rejects.toBe(databaseError);
+  });
+
+  it('creates a planned shipment with a generated identifier', async () => {
+    repository.findSupplierById.mockResolvedValue(supplier);
+    repository.findProductById.mockResolvedValue(product);
+    repository.createShipment.mockImplementation((created) =>
+      Promise.resolve(created),
+    );
+
+    const created = await service.createShipment({
+      supplierId: supplier.id,
+      productId: product.id,
+      quantity: 25,
+      pickupLocation: { city: 'Ulm', countryCode: 'DE' },
+      destination: { city: 'Berlin', countryCode: 'DE' },
+      plannedRoute: ['A8', 'A9'],
+      pickupAt: '2026-10-06T08:00:00.000Z',
+      plannedDeliveryAt: '2026-10-06T14:00:00.000Z',
+    });
+
+    expect(created.id).toMatch(/^SHP-[0-9a-f-]{36}$/);
+    expect(created.status).toBe('PLANNED');
+    expect(created.plannedRoute).toEqual(['A8', 'A9']);
+    expect(created).toMatchObject({
+      supplier,
+      product,
+      quantity: 25,
+      status: 'PLANNED',
+    });
+  });
+
+  it('rejects shipment creation when the supplier or product is unknown', async () => {
+    repository.findSupplierById.mockResolvedValue(undefined);
+    repository.findProductById.mockResolvedValue(product);
+
+    await expect(
+      service.createShipment({
+        supplierId: 'SUP-MISSING',
+        productId: product.id,
+        quantity: 25,
+        pickupLocation: { city: 'Ulm', countryCode: 'DE' },
+        destination: { city: 'Berlin', countryCode: 'DE' },
+        plannedRoute: ['A8'],
+        pickupAt: '2026-10-06T08:00:00.000Z',
+        plannedDeliveryAt: '2026-10-06T14:00:00.000Z',
+      }),
+    ).rejects.toThrow(new NotFoundException('supplier not found'));
+
+    expect(repository.createShipment.mock.calls).toHaveLength(0);
+
+    repository.findSupplierById.mockResolvedValue(supplier);
+    repository.findProductById.mockResolvedValue(undefined);
+
+    await expect(
+      service.createShipment({
+        supplierId: supplier.id,
+        productId: 'PROD-MISSING',
+        quantity: 25,
+        pickupLocation: { city: 'Ulm', countryCode: 'DE' },
+        destination: { city: 'Berlin', countryCode: 'DE' },
+        plannedRoute: ['A8'],
+        pickupAt: '2026-10-06T08:00:00.000Z',
+        plannedDeliveryAt: '2026-10-06T14:00:00.000Z',
+      }),
+    ).rejects.toThrow(new NotFoundException('product not found'));
+
+    expect(repository.createShipment.mock.calls).toHaveLength(0);
   });
 });

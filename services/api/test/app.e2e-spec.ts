@@ -28,10 +28,42 @@ const recordedAutobahnWarningsSchema = z.object({
   ),
 });
 
+const createdShipmentResponseSchema = z
+  .object({
+    id: z.string().regex(/^SHP-[0-9a-f-]{36}$/),
+    supplier: z.object({ id: z.string() }).passthrough(),
+    product: z.object({ id: z.string() }).passthrough(),
+    quantity: z.number().int().positive(),
+    pickupLocation: z.object({ city: z.string(), countryCode: z.string() }),
+    destination: z.object({ city: z.string(), countryCode: z.string() }),
+    plannedRoute: z.array(z.string()),
+    status: z.string(),
+    pickupAt: z.string(),
+    plannedDeliveryAt: z.string(),
+  })
+  .passthrough();
+
+const operationsShipmentsResponseSchema = z
+  .object({
+    totalShipments: z.number().int().nonnegative(),
+    otherShipments: z.array(
+      z
+        .object({
+          shipment: z.object({ id: z.string() }).passthrough(),
+          review: z
+            .object({ state: z.string(), needsAttention: z.boolean() })
+            .passthrough(),
+        })
+        .passthrough(),
+    ),
+  })
+  .passthrough();
+
 describe('AppController (e2e)', () => {
   let app: INestApplication<App> | undefined;
   let client: Client | undefined;
   let disruptionId: string;
+  let createdShipmentId: string;
   const authenticA1Warnings = recordedAutobahnWarningsSchema.parse(
     JSON.parse(
       readFileSync(
@@ -154,6 +186,71 @@ describe('AppController (e2e)', () => {
         status: 'PLANNED',
         pickupAt: '2026-10-03T06:30:00.000Z',
         plannedDeliveryAt: '2026-10-03T08:30:00.000Z',
+      });
+  });
+
+  it('/shipments (POST) creates a planned shipment with a server-generated ID', () => {
+    return request(app!.getHttpServer())
+      .post('/shipments')
+      .send({
+        supplierId: 'SUP-001',
+        productId: 'PROD-001',
+        quantity: 25,
+        pickupLocation: { city: 'Ulm', countryCode: 'de' },
+        destination: { city: 'Berlin', countryCode: 'DE' },
+        plannedRoute: ['a8', 'A9'],
+        pickupAt: '2026-10-06T08:00:00.000Z',
+        plannedDeliveryAt: '2026-10-06T14:00:00.000Z',
+      })
+      .expect(201)
+      .expect((response) => {
+        const body = createdShipmentResponseSchema.parse(response.body);
+        expect(body).toMatchObject({
+          supplier: { id: 'SUP-001' },
+          product: { id: 'PROD-001' },
+          quantity: 25,
+          pickupLocation: { city: 'Ulm', countryCode: 'DE' },
+          destination: { city: 'Berlin', countryCode: 'DE' },
+          plannedRoute: ['A8', 'A9'],
+          status: 'PLANNED',
+          pickupAt: '2026-10-06T08:00:00.000Z',
+          plannedDeliveryAt: '2026-10-06T14:00:00.000Z',
+        });
+        createdShipmentId = body.id;
+      });
+  });
+
+  it('/shipments (POST) rejects a client-controlled ID', () => {
+    return request(app!.getHttpServer())
+      .post('/shipments')
+      .send({
+        id: 'SHP-CLIENT',
+        supplierId: 'SUP-001',
+        productId: 'PROD-001',
+        quantity: 25,
+        pickupLocation: { city: 'Ulm', countryCode: 'DE' },
+        destination: { city: 'Berlin', countryCode: 'DE' },
+        plannedRoute: ['A8'],
+        pickupAt: '2026-10-06T08:00:00.000Z',
+        plannedDeliveryAt: '2026-10-06T14:00:00.000Z',
+      })
+      .expect(400);
+  });
+
+  it('/operations/shipments returns the created non-demo shipment as not evaluated', () => {
+    return request(app!.getHttpServer())
+      .get('/operations/shipments')
+      .expect(200)
+      .expect((response) => {
+        const body = operationsShipmentsResponseSchema.parse(response.body);
+        expect(body.totalShipments).toBe(3);
+        const created = body.otherShipments.find(
+          (item) => item.shipment.id === createdShipmentId,
+        );
+        expect(created?.review).toMatchObject({
+          state: 'NOT_EVALUATED',
+          needsAttention: false,
+        });
       });
   });
 

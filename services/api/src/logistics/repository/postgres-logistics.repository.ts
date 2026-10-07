@@ -66,6 +66,40 @@ function mapShipment(row: ShipmentRow): Shipment {
 export class PostgresLogisticsRepository implements LogisticsRepository {
   constructor(private readonly database: DatabaseService) {}
 
+  async createShipment(shipment: Shipment): Promise<Shipment> {
+    const result = await this.database.query<ShipmentRow>(
+      `INSERT INTO shipments (
+        id, supplier_id, product_id, quantity, pickup_location, destination,
+        planned_route, status, pickup_at, planned_delivery_at
+      ) VALUES ($1, $2, $3, $4, $5::jsonb, $6::jsonb, $7::text[], $8, $9, $10)
+      RETURNING
+        id,
+        supplier_id AS "supplierId",
+        product_id AS "productId",
+        quantity,
+        pickup_location AS "pickupLocation",
+        destination,
+        planned_route AS "plannedRoute",
+        status,
+        pickup_at AS "pickupAt",
+        planned_delivery_at AS "plannedDeliveryAt"`,
+      [
+        shipment.id,
+        shipment.supplierId,
+        shipment.productId,
+        shipment.quantity,
+        JSON.stringify(shipment.pickupLocation),
+        JSON.stringify(shipment.destination),
+        shipment.plannedRoute,
+        shipment.status,
+        shipment.pickupAt,
+        shipment.plannedDeliveryAt,
+      ],
+    );
+
+    return mapShipment(result.rows[0]);
+  }
+
   async findAllShipments(): Promise<Shipment[]> {
     const result = await this.database.query<ShipmentRow>(
       `SELECT
