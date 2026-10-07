@@ -11,9 +11,7 @@ import { DemoVehicleState } from './model/demo-vehicle-state.model';
 
 const routeHash = 'a'.repeat(64);
 const startPosition: [number, number] = [10.686606, 53.865509];
-const nearDisruptionPosition: [number, number] = [
-  10.326863322601533, 53.701048700082,
-];
+const nearDisruptionPosition: [number, number] = [10.3268633226, 53.7010487001];
 
 function vehicleState(
   overrides: Partial<DemoVehicleState> = {},
@@ -131,7 +129,7 @@ describe('DemoService', () => {
     };
   }
 
-  it('returns only the prepared SHP-002 scenario with the exact REPLAY warning', async () => {
+  it('returns the supported SHP-002 scenario with the exact REPLAY warning', async () => {
     const { service, disruptions } = createService();
 
     await expect(
@@ -238,9 +236,7 @@ describe('DemoService', () => {
         expectedRevision: 0,
       }),
     ).resolves.toEqual(updated);
-    expect(route.positionAtElapsedSeconds).toHaveBeenCalledWith(
-      NEAR_DISRUPTION_ELAPSED_SECONDS,
-    );
+    expect(route.positionAtElapsedSeconds).not.toHaveBeenCalled();
     expect(vehicles.updatePositionIfRevision).toHaveBeenCalledWith(
       DEMO_VEHICLE_ID,
       0,
@@ -283,7 +279,7 @@ describe('DemoService', () => {
     ).rejects.toBeInstanceOf(ConflictException);
   });
 
-  it('does not expose other shipments through the demo endpoint', async () => {
+  it('does not expose unsupported shipments through the demo endpoint', async () => {
     const { service } = createService();
 
     await expect(service.getShipmentScenario('SHP-001')).rejects.toBeInstanceOf(

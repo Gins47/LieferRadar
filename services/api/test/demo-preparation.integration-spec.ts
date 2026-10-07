@@ -2,12 +2,17 @@ import { Test, TestingModule } from '@nestjs/testing';
 import { Client } from 'pg';
 import { DemoModule } from '../src/demo/demo.module';
 import {
+  DEMO_SHIPMENT_003_ID,
+  DEMO_SHIPMENT_004_ID,
   DEMO_SHIPMENT_ID,
   DEMO_START_AT,
+  DEMO_VEHICLE_003_ID,
+  DEMO_VEHICLE_004_ID,
   DEMO_VEHICLE_ID,
   DemoPreparationService,
   SELECTED_WARNING_PROVIDER_ID,
   SELECTED_WARNING_SOURCE,
+  SHIPMENT_003_ELAPSED_SECONDS,
 } from '../src/demo/demo-preparation.service';
 import { seedLogisticsFixtures } from '../src/logistics/repository/logistics-fixture-seed';
 import { getTestDatabaseUrl } from './database-test-context';
@@ -44,7 +49,7 @@ describe('demo preparation', () => {
     await client.end();
   });
 
-  it('persists the approved vehicle only after exact REPLAY warning verification', async () => {
+  it('persists three independent route-derived vehicle contexts with the exact REPLAY warning', async () => {
     const result = await preparation.prepare();
 
     expect(result.warning).toMatchObject({
@@ -58,6 +63,54 @@ describe('demo preparation', () => {
       simulatedAt: DEMO_START_AT,
       revision: 0,
     });
+    expect(result.vehicles).toHaveLength(3);
+    const states = await client.query<{
+      shipmentId: string;
+      vehicleId: string;
+      elapsedSeconds: number;
+      position: [number, number];
+      simulatedAt: Date;
+      revision: number;
+    }>(
+      `SELECT
+        demo_vehicle_shipments.shipment_id AS "shipmentId",
+        demo_vehicle_state.vehicle_id AS "vehicleId",
+        demo_vehicle_state.elapsed_seconds AS "elapsedSeconds",
+        demo_vehicle_state.position,
+        demo_vehicle_state.simulated_at AS "simulatedAt",
+        demo_vehicle_state.revision
+      FROM demo_vehicle_shipments
+      JOIN demo_vehicle_state ON demo_vehicle_state.vehicle_id = demo_vehicle_shipments.vehicle_id
+      WHERE demo_vehicle_shipments.shipment_id = ANY($1::text[])
+      ORDER BY demo_vehicle_shipments.shipment_id`,
+      [[DEMO_SHIPMENT_ID, DEMO_SHIPMENT_003_ID, DEMO_SHIPMENT_004_ID]],
+    );
+    expect(states.rows).toEqual([
+      {
+        shipmentId: DEMO_SHIPMENT_ID,
+        vehicleId: DEMO_VEHICLE_ID,
+        elapsedSeconds: 0,
+        position: [10.686606, 53.865509],
+        simulatedAt: DEMO_START_AT,
+        revision: 0,
+      },
+      {
+        shipmentId: DEMO_SHIPMENT_003_ID,
+        vehicleId: DEMO_VEHICLE_003_ID,
+        elapsedSeconds: SHIPMENT_003_ELAPSED_SECONDS,
+        position: [10.236442, 53.620842],
+        simulatedAt: new Date('2026-10-03T07:53:24.000Z'),
+        revision: 0,
+      },
+      {
+        shipmentId: DEMO_SHIPMENT_004_ID,
+        vehicleId: DEMO_VEHICLE_004_ID,
+        elapsedSeconds: 0,
+        position: [10.686606, 53.865509],
+        simulatedAt: DEMO_START_AT,
+        revision: 0,
+      },
+    ]);
     await expect(
       client.query(
         'SELECT vehicle_id FROM demo_vehicle_shipments WHERE shipment_id = $1',
@@ -91,5 +144,11 @@ describe('demo preparation', () => {
       },
       warning: result.warning,
     });
+    await expect(
+      client.query('SELECT count(*)::int AS count FROM demo_vehicle_state'),
+    ).resolves.toMatchObject({ rows: [{ count: 3 }] });
+    await expect(
+      client.query('SELECT count(*)::int AS count FROM demo_vehicle_shipments'),
+    ).resolves.toMatchObject({ rows: [{ count: 3 }] });
   });
 });

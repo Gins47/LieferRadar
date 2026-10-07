@@ -11,6 +11,7 @@ import {
   DEMO_START_AT,
   SELECTED_WARNING_PROVIDER_ID,
   SELECTED_WARNING_SOURCE,
+  SUPPORTED_DEMO_SHIPMENT_IDS,
 } from './demo-preparation.service';
 import {
   DemoVehicleState,
@@ -155,6 +156,9 @@ export class DemoService {
     shipmentId: string,
     request: DemoVehiclePositionRequest,
   ) {
+    if (shipmentId !== DEMO_SHIPMENT_ID) {
+      throw new NotFoundException('demo shipment position is not supported');
+    }
     const { vehicle } = await this.getPreparedScenario(shipmentId);
     const target = targetForPosition(request.position);
     const updated = await this.vehicles.updatePositionIfRevision(
@@ -181,7 +185,7 @@ export class DemoService {
     vehicle: DemoVehicleState;
     warning: Disruption;
   }> {
-    if (shipmentId !== DEMO_SHIPMENT_ID) {
+    if (!SUPPORTED_DEMO_SHIPMENT_IDS.some((id) => id === shipmentId)) {
       throw new NotFoundException('demo shipment not found');
     }
 

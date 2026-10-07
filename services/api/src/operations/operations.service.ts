@@ -1,5 +1,5 @@
 import { Injectable } from '@nestjs/common';
-import { DEMO_SHIPMENT_ID } from '../demo/demo-preparation.service';
+import { SUPPORTED_DEMO_SHIPMENT_IDS } from '../demo/demo-preparation.service';
 import { DemoService } from '../demo/demo.service';
 import { PostgresDisruptionRepository } from '../disruption/repository/postgres-disruption.repository';
 import { ShipmentView } from '../logistics/model/shipment-view.model';
@@ -27,6 +27,46 @@ function shipmentSummary(shipment: ShipmentView) {
     status: shipment.status,
     pickupAt: shipment.pickupAt,
     plannedDeliveryAt: shipment.plannedDeliveryAt,
+  };
+}
+
+function notEvaluatedReview() {
+  return {
+    state: 'NOT_EVALUATED' as const,
+    reason:
+      'No complete approved disruption-assessment scenario is configured for this shipment.',
+    needsAttention: false,
+  };
+}
+
+function scenarioUnavailableReview() {
+  return {
+    state: 'SCENARIO_UNAVAILABLE' as const,
+    reason: 'The approved prepared demonstration scenario is unavailable.',
+    needsAttention: false,
+  };
+}
+
+function isSupportedPreparedShipment(shipmentId: string): boolean {
+  return SUPPORTED_DEMO_SHIPMENT_IDS.some((id) => id === shipmentId);
+}
+
+function reviewWarning(
+  warning: Awaited<ReturnType<DemoService['getShipmentScenario']>>['warning'],
+) {
+  return {
+    evidenceId: `warning-${warning.id}`,
+    source: warning.source,
+    providerId: warning.providerId,
+    ingestionMode: warning.ingestionMode,
+    capturedAt: warning.capturedAt,
+    queriedRoad: warning.queriedRoad,
+    title: warning.title,
+    subtitle: warning.subtitle ?? undefined,
+    descriptions: warning.descriptions,
+    startTimestamp: warning.startTimestamp,
+    endTimestamp: warning.endTimestamp,
+    delayMinutes: warning.delayMinutes ?? undefined,
   };
 }
 
@@ -63,6 +103,39 @@ export class OperationsService {
     };
   }
 
+  async getShipment(shipmentId: string) {
+    const shipment = await this.shipments.getShipment(shipmentId);
+    if (!isSupportedPreparedShipment(shipment.id)) {
+      return {
+        shipment,
+        review: notEvaluatedReview(),
+        aiAssessmentAvailable: false,
+      };
+    }
+
+    try {
+      const scenario = await this.demo.getShipmentScenario(shipment.id);
+      return {
+        shipment,
+        vehicle: scenario.vehicle,
+        review: {
+          state: scenario.operatorReview.state,
+          reason: scenario.operatorReview.reason,
+          needsAttention: scenario.operatorReview.needsAttention,
+        },
+        evidence: scenario.operatorReview.evidence,
+        reviewWarning: reviewWarning(scenario.warning),
+        aiAssessmentAvailable: scenario.operatorReview.state === 'NEEDS_REVIEW',
+      };
+    } catch {
+      return {
+        shipment,
+        review: scenarioUnavailableReview(),
+        aiAssessmentAvailable: false,
+      };
+    }
+  }
+
   async getWarnings(query: OperationsWarningsQuery, now = new Date()) {
     const shipments = await this.shipments.getShipments();
     const roads = [
@@ -90,15 +163,11 @@ export class OperationsService {
   }
 
   private async shipmentView(shipment: ShipmentView) {
-    if (shipment.id !== DEMO_SHIPMENT_ID) {
+    if (!isSupportedPreparedShipment(shipment.id)) {
       return {
         shipment: shipmentSummary(shipment),
-        review: {
-          state: 'NOT_EVALUATED',
-          reason:
-            'No complete approved disruption-assessment scenario is configured for this shipment.',
-          needsAttention: false,
-        },
+        review: notEvaluatedReview(),
+        aiAssessmentAvailable: false,
       };
     }
 
@@ -107,15 +176,13 @@ export class OperationsService {
       return {
         shipment: shipmentSummary(shipment),
         review: scenario.operatorReview,
+        aiAssessmentAvailable: scenario.operatorReview.state === 'NEEDS_REVIEW',
       };
     } catch {
       return {
         shipment: shipmentSummary(shipment),
-        review: {
-          state: 'SCENARIO_UNAVAILABLE',
-          reason: 'The approved SHP-002 demonstration scenario is unavailable.',
-          needsAttention: false,
-        },
+        review: scenarioUnavailableReview(),
+        aiAssessmentAvailable: false,
       };
     }
   }

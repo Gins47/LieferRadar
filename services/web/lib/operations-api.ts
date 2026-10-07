@@ -19,6 +19,7 @@ export type ShipmentReadModel = {
     reason: string;
     needsAttention: boolean;
   };
+  aiAssessmentAvailable: boolean;
 };
 
 export type OperationsShipments = {

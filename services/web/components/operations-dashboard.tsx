@@ -29,11 +29,9 @@ function ShipmentCard({ item, attention }: { item: ShipmentReadModel; attention:
       </CardHeader>
       <CardContent className="flex flex-wrap items-center justify-between gap-3 text-sm text-slate-600">
         <p>Planned road: {shipment.plannedRoute.join(", ") || "Not supplied"}</p>
-        {shipment.id === "SHP-002" && (
-          <Link href="/shipments/SHP-002" className="font-medium text-sky-700 hover:underline">
-            Review shipment →
-          </Link>
-        )}
+        <Link href={`/shipments/${encodeURIComponent(shipment.id)}`} className="font-medium text-sky-700 hover:underline">
+          Review shipment →
+        </Link>
       </CardContent>
     </Card>
   );
@@ -72,7 +70,7 @@ export function OperationsDashboard() {
         {summary.map(([label, value]) => <Card key={String(label)}><CardHeader><CardDescription>{label}</CardDescription><CardTitle className="text-3xl">{value}</CardTitle></CardHeader></Card>)}
       </section>
       <section className="space-y-4">
-        <div><h2 className="text-xl font-semibold">Needs attention</h2><p className="mt-1 text-sm text-slate-600">Backend-identified shipments requiring operator review.</p></div>
+        <div><h2 className="text-xl font-semibold">Needs attention</h2><p className="mt-1 text-sm text-slate-600">shipments requiring operator review.</p></div>
         {data.shipmentsRequiringAttention.length ? data.shipmentsRequiringAttention.map((item) => <ShipmentCard key={item.shipment.id} item={item} attention />) : <Card><CardContent className="py-6 text-sm text-slate-600">No shipments currently require review based on available evidence.</CardContent></Card>}
       </section>
       <section className="space-y-4">
