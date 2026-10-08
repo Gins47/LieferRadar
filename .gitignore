@@ -82,9 +82,6 @@ SetUp.md
 /services/ai-service/test/evaluationRunner.py
 /services/ai-service/test/search.py
 
-# Legacy refund/support documentation
-/ReadMe.md
-
 # Research samples
 /docs/research/fixtures/autobahn
 
